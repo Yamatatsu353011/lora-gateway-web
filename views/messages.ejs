@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Received Messages</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 0.4rem; }
+    th { background: #eee; }
+    nav a { margin-right: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Received Messages</h1>
+
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/messages">Messages</a>
+    <a href="/send">Send</a>
+  </nav>
+
+  <table>
+    <tr>
+      <th>ID</th>
+      <th>Packet ID</th>
+      <th>Source</th>
+      <th>Previous</th>
+      <th>Destination</th>
+      <th>BST Prefix</th>
+      <th>Payload</th>
+      <th>RSSI</th>
+      <th>SNR</th>
+      <th>Hop</th>
+      <th>TTL</th>
+      <th>Received At</th>
+    </tr>
+    <% rows.forEach(row => { %>
+      <tr>
+        <td><%= row.id %></td>
+        <td><%= row.packet_id %></td>
+        <td><%= row.source_node %></td>
+        <td><%= row.previous_node %></td>
+        <td><%= row.destination_node %></td>
+        <td><%= row.target_bst_prefix %></td>
+        <td><%= row.payload_text %></td>
+        <td><%= row.rssi %></td>
+        <td><%= row.snr %></td>
+        <td><%= row.hop_count %></td>
+        <td><%= row.ttl %></td>
+        <td><%= row.received_at %></td>
+      </tr>
+    <% }) %>
+  </table>
+</body>
+</html>

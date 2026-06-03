@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>受注Reply</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+  <header>
+    <h1>受注Reply</h1>
+  </header>
+
+  <main>
+    <nav>
+      <a href="/mobile">Mobile Home</a>
+      <a href="/">GPS Dashboard</a>
+      <a href="/requests">受注画面</a>
+      <a href="/orders/<%= order.order_id %>">発注詳細</a>
+    </nav>
+
+    <form method="post" action="/requests/<%= order.order_id %>/reply">
+      <div class="card">
+        <h2>対象発注</h2>
+        <p>
+          Order ID: <strong><%= order.order_id %></strong><br>
+          発注ノード: <%= order.requester_node %><br>
+          対象領域: <%= order.target_area %>
+        </p>
+
+        <label>
+          応答ノード
+          <input type="text" name="responder_node" value="mock-shelter-b">
+        </label>
+
+        <br><br>
+
+        <label>
+          備考
+          <textarea name="note" rows="3"></textarea>
+        </label>
+      </div>
+
+      <h2>提供可能数</h2>
+
+      <div class="item-grid">
+        <% items.forEach(item => { %>
+          <div class="card">
+            <div class="item-title"><%= item.item_name %></div>
+            <p class="small">
+              <%= item.category %><br>
+              必要数: <%= item.requested_qty %> /
+              受け済み: <%= item.accepted_qty %> /
+              残数: <strong><%= item.remaining_qty %></strong> <%= item.unit %>
+            </p>
+
+            <label>
+              提供可能数
+              <input
+                type="number"
+                min="0"
+                max="<%= item.remaining_qty %>"
+                value="0"
+                name="offer_<%= item.item_code %>">
+            </label>
+          </div>
+        <% }) %>
+      </div>
+
+      <button type="submit">提供可能数をReplyする</button>
+    </form>
+  </main>
+</body>
+</html>

@@ -1,0 +1,9 @@
+● lora-web.service - LoRa Gateway Web Service
+     Loaded: loaded (]8;;file://yaglabterm02-HP-ProBook-650-G1/etc/systemd/system/lora-web.service/etc/systemd/system/lora-web.service]8;;; [0;1;32menabled[0m; preset: [0;1;32menabled[0m)
+     Active: activating (auto-restart) (Result: exit-code) since Tue 2026-06-02 13:03:17 JST; 1s ago
+    Process: 13228 ExecStart=/usr/bin/node /opt/lora-gateway-web/app.js [0;1;31m(code=exited, status=1/FAILURE)[0m
+   Main PID: 13228 (code=exited, status=1/FAILURE)
+        CPU: 153ms
+
+ 6月 02 13:03:17 yaglabterm02-HP-ProBook-650-G1 systemd[1]: [0;1;39m[0;1;31m[0;1;39mlora-web.service: Main process exited, code=exited, status=1/FAILURE[0m
+ 6月 02 13:03:17 yaglabterm02-HP-ProBook-650-G1 systemd[1]: [0;1;38;5;185m[0;1;39m[0;1;38;5;185mlora-web.service: Failed with result 'exit-code'.[0m

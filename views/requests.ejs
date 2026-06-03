@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>受注画面</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+  <header>
+    <h1>受注画面</h1>
+  </header>
+
+  <main>
+    <nav>
+      <a href="/mobile">Mobile Home</a>
+      <a href="/">GPS Dashboard</a>
+      <a href="/orders">発注一覧</a>
+      <a href="/orders/new">新規発注</a>
+    </nav>
+
+    <div class="card">
+      <p>周辺から届いた発注リクエストのモック一覧です。</p>
+    </div>
+
+    <table class="responsive-table">
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>発注ノード</th>
+          <th>対象領域</th>
+          <th>必要数合計</th>
+          <th>受け数合計</th>
+          <th>残数合計</th>
+          <th>作成日時</th>
+          <th>Reply</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <% orders.forEach(o => { %>
+          <tr>
+            <td data-label="Order ID"><%= o.order_id %></td>
+            <td data-label="発注ノード"><%= o.requester_node %></td>
+            <td data-label="対象領域"><%= o.target_area %></td>
+            <td data-label="必要数合計"><%= o.total_requested || 0 %></td>
+            <td data-label="受け数合計"><%= o.total_accepted || 0 %></td>
+            <td data-label="残数合計"><%= o.total_remaining || 0 %></td>
+            <td data-label="作成日時"><%= o.created_at %></td>
+            <td data-label="Reply">
+              <a href="/requests/<%= o.order_id %>/reply">提供可能数を返す</a>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>

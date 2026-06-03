@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>災害物資支援システム</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+  <header>
+    <h1>災害物資支援システム</h1>
+  </header>
+
+  <main>
+    <div class="card">
+      <h2>発注側</h2>
+      <p>必要な物資数を周辺拠点へ通知します。</p>
+      <a class="button-link primary" href="/orders/new">新規発注</a>
+      <a class="button-link" href="/orders">発注状況を見る</a>
+    </div>
+
+    <div class="card">
+      <h2>受注側</h2>
+      <p>届いた発注に対して、提供可能数を返します。</p>
+      <a class="button-link primary" href="/requests">受注画面</a>
+    </div>
+
+    <div class="card">
+      <h2>位置・通信状態</h2>
+      <p>現在位置、GPS状態、LoRa状態を確認します。</p>
+      <a class="button-link" href="/">GPS Dashboard</a>
+    </div>
+  </main>
+</body>
+</html>

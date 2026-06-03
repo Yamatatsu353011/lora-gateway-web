@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>発注一覧</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+  <header>
+    <h1>発注一覧</h1>
+  </header>
+
+  <main>
+    <nav>
+      <a href="/mobile">Mobile Home</a>
+      <a href="/">GPS Dashboard</a>
+      <a class="primary" href="/orders/new">新規発注</a>
+      <a href="/requests">受注画面</a>
+    </nav>
+
+    <table class="responsive-table">
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>発注ノード</th>
+          <th>対象領域</th>
+          <th>対象点</th>
+          <th>範囲</th>
+          <th>状態</th>
+          <th>必要数合計</th>
+          <th>受け数合計</th>
+          <th>残数合計</th>
+          <th>作成日時</th>
+          <th>詳細</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <% orders.forEach(o => { %>
+          <tr>
+            <td data-label="Order ID"><%= o.order_id %></td>
+            <td data-label="発注ノード"><%= o.requester_node %></td>
+            <td data-label="対象領域"><%= o.target_area_label || o.target_area %></td>
+
+            <td data-label="対象点">
+              <% if (o.target_lat && o.target_lon) { %>
+                <%= Number(o.target_lat).toFixed(6) %>, <%= Number(o.target_lon).toFixed(6) %>
+              <% } else { %>
+                -
+              <% } %>
+            </td>
+
+            <td data-label="範囲">
+              <% if (o.target_size_m) { %>
+                Lv.<%= o.target_level %> / <%= o.target_size_m %> m square
+              <% } else { %>
+                -
+              <% } %>
+            </td>
+
+            <td data-label="状態" class="status-<%= o.status %>"><%= o.status %></td>
+            <td data-label="必要数合計"><%= o.total_requested || 0 %></td>
+            <td data-label="受け数合計"><%= o.total_accepted || 0 %></td>
+            <td data-label="残数合計"><%= o.total_remaining || 0 %></td>
+            <td data-label="作成日時"><%= o.created_at %></td>
+            <td data-label="詳細"><a href="/orders/<%= o.order_id %>">詳細</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>

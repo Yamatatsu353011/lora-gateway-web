@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Send LoRa Packet</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    label { display: block; margin-top: 1rem; }
+    input, textarea { width: 100%; max-width: 700px; }
+    nav a { margin-right: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Send LoRa Packet</h1>
+
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/messages">Messages</a>
+    <a href="/send">Send</a>
+  </nav>
+
+  <form method="post" action="/send">
+    <label>
+      Destination Node
+      <input type="text" name="destination_node" placeholder="optional">
+    </label>
+
+    <label>
+      Target BST Prefix
+      <input type="text" name="target_bst_prefix" placeholder="optional">
+    </label>
+
+    <label>
+      Priority
+      <input type="number" name="priority" value="100">
+    </label>
+
+    <label>
+      Payload Text
+      <textarea name="payload_text" rows="6"></textarea>
+    </label>
+
+    <p>
+      <button type="submit">Enqueue to LoRa TX</button>
+    </p>
+  </form>
+</body>
+</html>

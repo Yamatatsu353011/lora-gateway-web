@@ -1,0 +1,18 @@
+INSERT OR IGNORE INTO item_master(item_code, item_name, category, unit, display_order) VALUES
+('water', '水', '食料・飲料', '本', 10),
+('hardtack', '乾パン類', '食料・飲料', '食', 20),
+('rice_meal', '米飯類', '食料・飲料', '食', 30),
+('other_food', 'その他食料', '食', '個', 40),
+('supplement', 'サプリメント', '医薬・衛生', '個', 50),
+('cold_medicine', '風邪薬', '医薬・衛生', '個', 60),
+('painkiller', '鎮痛薬', '医薬・衛生', '個', 70),
+('stomach_medicine', '胃薬', '医薬・衛生', '個', 80),
+('eye_drops', '目薬', '医薬・衛生', '個', 90),
+('bandage', '包帯', '医薬・衛生', '個', 100),
+('compress', '湿布', '医薬・衛生', '枚', 110),
+('blanket', '毛布', '生活用品', '枚', 120),
+('mat', 'マット', '生活用品', '枚', 130),
+('cushion', 'クッション', '生活用品', '個', 140),
+('portable_toilet', '携帯用トイレ', '生活用品', '個', 150),
+('battery', '電池', '電源・照明', '個', 160),
+('light', '電灯', '電源・照明', '個', 170);

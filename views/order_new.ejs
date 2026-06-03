@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>発注画面</title>
+
+  <link rel="stylesheet" href="/css/style.css">
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+  </script>
+
+  <style>
+    #target-map {
+      height: 360px;
+      width: 100%;
+      border: 1px solid #d8d8d8;
+      border-radius: 8px;
+      background: #ddd;
+    }
+
+    .tile-info-table td:first-child {
+      width: 40%;
+      color: #666;
+    }
+
+    @media (max-width: 700px) {
+      #target-map {
+        height: 300px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>発注画面</h1>
+  </header>
+
+  <main>
+    <nav>
+      <a href="/mobile">Mobile Home</a>
+      <a href="/">GPS Dashboard</a>
+      <a href="/orders">発注一覧</a>
+      <a href="/requests">受注画面</a>
+    </nav>
+
+    <form method="post" action="/orders">
+      <div class="card form-section">
+        <h2>発注元</h2>
+
+        <label>
+          発注ノード
+          <input type="text" name="requester_node" value="dev-gateway-a">
+        </label>
+
+        <br><br>
+
+        <label>
+          備考
+          <textarea name="note" rows="3"></textarea>
+        </label>
+      </div>
+
+      <div class="card form-section">
+        <h2>対象BST-IDタイル</h2>
+
+        <p class="small">
+          地図をクリックすると、その点を含むBST-ID XYタイルを選択します。
+          表示される四角形はクリック点中心ではなく、量子化されたタイル境界です。
+        </p>
+
+        <div id="target-map"></div>
+
+        <br>
+
+        <div class="grid">
+          <label>
+            XY Zoom
+            <select id="target_zoom" name="target_zoom">
+              <option value="13">Zoom 13 / very wide</option>
+              <option value="14">Zoom 14 / wide</option>
+              <option value="15">Zoom 15</option>
+              <option value="16" selected>Zoom 16</option>
+              <option value="17">Zoom 17</option>
+              <option value="18">Zoom 18 / narrow</option>
+              <option value="19">Zoom 19 / very narrow</option>
+            </select>
+          </label>
+
+          <label>
+            対象領域ラベル
+            <input
+              type="text"
+              id="target_area_label"
+              name="target_area_label"
+              placeholder="例: 会津大学周辺 / 周辺避難所 / Area-A">
+          </label>
+        </div>
+
+        <input type="hidden" id="target_lat" name="target_lat">
+        <input type="hidden" id="target_lon" name="target_lon">
+
+        <input type="hidden" id="target_zx" name="target_zx">
+        <input type="hidden" id="target_zy" name="target_zy">
+        <input type="hidden" id="target_xtile" name="target_xtile">
+        <input type="hidden" id="target_ytile" name="target_ytile">
+
+        <input type="hidden" id="target_south" name="target_south">
+        <input type="hidden" id="target_north" name="target_north">
+        <input type="hidden" id="target_west" name="target_west">
+        <input type="hidden" id="target_east" name="target_east">
+
+        <br>
+
+        <div class="grid">
+          <div class="card">
+            <h3>Clicked Point</h3>
+            <table class="tile-info-table">
+              <tr><td>Latitude</td><td id="view_clicked_lat">-</td></tr>
+              <tr><td>Longitude</td><td id="view_clicked_lon">-</td></tr>
+            </table>
+          </div>
+
+          <div class="card">
+            <h3>BST-ID XY Tile</h3>
+            <table class="tile-info-table">
+              <tr><td>ZX</td><td id="view_zx">-</td></tr>
+              <tr><td>ZY</td><td id="view_zy">-</td></tr>
+              <tr><td>X tile</td><td id="view_xtile">-</td></tr>
+              <tr><td>Y tile</td><td id="view_ytile">-</td></tr>
+              <tr><td>BST XY</td><td id="view_bst_xy">-</td></tr>
+            </table>
+          </div>
+
+          <div class="card">
+            <h3>Tile Bounds</h3>
+            <table class="tile-info-table">
+              <tr><td>North</td><td id="view_north">-</td></tr>
+              <tr><td>South</td><td id="view_south">-</td></tr>
+              <tr><td>West</td><td id="view_west">-</td></tr>
+              <tr><td>East</td><td id="view_east">-</td></tr>
+              <tr><td>Approx. size</td><td id="view_tile_size">-</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <h2>必要物資</h2>
+
+      <div class="item-grid">
+        <% items.forEach(item => { %>
+          <div class="card">
+            <div class="item-title"><%= item.item_name %></div>
+            <p class="small"><%= item.category %> / 単位: <%= item.unit %></p>
+
+            <label>
+              必要数
+              <input
+                type="number"
+                min="0"
+                value="0"
+                name="qty_<%= item.item_code %>">
+            </label>
+          </div>
+        <% }) %>
+      </div>
+
+      <button type="submit">必要数を通知する</button>
+    </form>
+  </main>
+
+  <script>
+    const defaultLat = 37.5232692;
+    const defaultLon = 139.9393367;
+
+    const map = L.map("target-map").setView([defaultLat, defaultLon], 16);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 20,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    let clickedMarker = null;
+    let tileRectangle = null;
+
+    const zoomSelect = document.getElementById("target_zoom");
+
+    const targetLatInput = document.getElementById("target_lat");
+    const targetLonInput = document.getElementById("target_lon");
+
+    const targetZxInput = document.getElementById("target_zx");
+    const targetZyInput = document.getElementById("target_zy");
+    const targetXtileInput = document.getElementById("target_xtile");
+    const targetYtileInput = document.getElementById("target_ytile");
+
+    const targetSouthInput = document.getElementById("target_south");
+    const targetNorthInput = document.getElementById("target_north");
+    const targetWestInput = document.getElementById("target_west");
+    const targetEastInput = document.getElementById("target_east");
+
+    function setText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    }
+
+    function lonToXTile(lon, z) {
+      const n = Math.pow(2, z);
+      return Math.floor(((lon + 180.0) / 360.0) * n);
+    }
+
+    function latToYTile(lat, z) {
+      const n = Math.pow(2, z);
+      const latRad = lat * Math.PI / 180.0;
+
+      return Math.floor(
+        (
+          0.5 -
+          Math.log(Math.tan(latRad) + 1.0 / Math.cos(latRad)) /
+          (2.0 * Math.PI)
+        ) * n
+      );
+    }
+
+    function xTileToLon(x, z) {
+      const n = Math.pow(2, z);
+      return x / n * 360.0 - 180.0;
+    }
+
+    function yTileToLat(y, z) {
+      const n = Math.pow(2, z);
+      const mercN = Math.PI * (1.0 - 2.0 * y / n);
+      return Math.atan(Math.sinh(mercN)) * 180.0 / Math.PI;
+    }
+
+    function tileBounds(x, y, z) {
+      const west = xTileToLon(x, z);
+      const east = xTileToLon(x + 1, z);
+      const north = yTileToLat(y, z);
+      const south = yTileToLat(y + 1, z);
+
+      return {
+        west,
+        east,
+        south,
+        north
+      };
+    }
+
+    function haversineMeters(lat1, lon1, lat2, lon2) {
+      const R = 6378137.0;
+      const toRad = deg => deg * Math.PI / 180.0;
+
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function currentZoom() {
+      return Number(zoomSelect.value);
+    }
+
+    function bstXyLabel(zx, zy, xtile, ytile) {
+      if (zx === zy) {
+        return `XY:z${zx}:x${xtile}:y${ytile}`;
+      }
+      return `XY:zx${zx}:zy${zy}:x${xtile}:y${ytile}`;
+    }
+
+    function updateTargetTile(lat, lon) {
+      const z = currentZoom();
+
+      // Initially use isotropic XY zoom.
+      // Later this can be changed to zx != zy.
+      const zx = z;
+      const zy = z;
+
+      const xtile = lonToXTile(lon, zx);
+      const ytile = latToYTile(lat, zy);
+
+      const bounds = tileBounds(xtile, ytile, z);
+
+      targetLatInput.value = lat.toFixed(8);
+      targetLonInput.value = lon.toFixed(8);
+
+      targetZxInput.value = zx;
+      targetZyInput.value = zy;
+      targetXtileInput.value = xtile;
+      targetYtileInput.value = ytile;
+
+      targetSouthInput.value = bounds.south.toFixed(8);
+      targetNorthInput.value = bounds.north.toFixed(8);
+      targetWestInput.value = bounds.west.toFixed(8);
+      targetEastInput.value = bounds.east.toFixed(8);
+
+      if (clickedMarker) {
+        clickedMarker.setLatLng([lat, lon]);
+      } else {
+        clickedMarker = L.marker([lat, lon]).addTo(map);
+      }
+
+      clickedMarker.bindPopup(
+        `Clicked point<br>` +
+        `Lat: ${lat.toFixed(7)}<br>` +
+        `Lon: ${lon.toFixed(7)}`
+      );
+
+      const leafletBounds = [
+        [bounds.south, bounds.west],
+        [bounds.north, bounds.east]
+      ];
+
+      if (tileRectangle) {
+        tileRectangle.setBounds(leafletBounds);
+      } else {
+        tileRectangle = L.rectangle(leafletBounds, {
+          weight: 2,
+          fillOpacity: 0.15
+        }).addTo(map);
+      }
+
+      const widthM = haversineMeters(
+        (bounds.north + bounds.south) / 2.0,
+        bounds.west,
+        (bounds.north + bounds.south) / 2.0,
+        bounds.east
+      );
+
+      const heightM = haversineMeters(
+        bounds.south,
+        (bounds.west + bounds.east) / 2.0,
+        bounds.north,
+        (bounds.west + bounds.east) / 2.0
+      );
+
+      const label = bstXyLabel(zx, zy, xtile, ytile);
+
+      setText("view_clicked_lat", lat.toFixed(8));
+      setText("view_clicked_lon", lon.toFixed(8));
+
+      setText("view_zx", zx);
+      setText("view_zy", zy);
+      setText("view_xtile", xtile);
+      setText("view_ytile", ytile);
+      setText("view_bst_xy", label);
+
+      setText("view_north", bounds.north.toFixed(8));
+      setText("view_south", bounds.south.toFixed(8));
+      setText("view_west", bounds.west.toFixed(8));
+      setText("view_east", bounds.east.toFixed(8));
+      setText("view_tile_size", `${widthM.toFixed(1)} m × ${heightM.toFixed(1)} m`);
+    }
+
+    map.on("click", function(e) {
+      updateTargetTile(e.latlng.lat, e.latlng.lng);
+    });
+
+    zoomSelect.addEventListener("change", function() {
+      const lat = Number(targetLatInput.value || defaultLat);
+      const lon = Number(targetLonInput.value || defaultLon);
+      updateTargetTile(lat, lon);
+    });
+
+    // Initial target
+    updateTargetTile(defaultLat, defaultLon);
+  </script>
+</body>
+</html>
