@@ -72,6 +72,7 @@ function makeBstXyLabel(zx, zy, xtile, ytile) {
 
   return `XY:zx${zx}:zy${zy}:x${xtile}:y${ytile}`;
 }
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
@@ -82,9 +83,11 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("/", async (req, res) => {
   res.render("index");
 });
+
 app.get("/mobile", (req, res) => {
   res.render("mobile_home");
 });
+
 app.post("/send", async (req, res) => {
   const packet = {
     packet_id: `web-${Date.now()}`,
@@ -103,6 +106,7 @@ app.post("/send", async (req, res) => {
 app.get("/api/state", async (req, res) => {
   function parseJsonOrNull(value) {
     if (!value) return null;
+
     try {
       return JSON.parse(value);
     } catch {
@@ -130,6 +134,33 @@ app.get("/api/state", async (req, res) => {
   res.json(result);
 });
 
+app.get("/api/nodes", async (req, res) => {
+  try {
+    const nodes = await dbAll(
+      `SELECT
+         node_id,
+         lat,
+         lon,
+         updated_at
+       FROM mobile_nodes
+       WHERE lat IS NOT NULL
+         AND lon IS NOT NULL
+       ORDER BY node_id`
+    );
+
+    res.json({
+      nodes: nodes
+    });
+  } catch (err) {
+    console.error("[API-NODES-ERR]", err);
+
+    res.status(500).json({
+      nodes: [],
+      error: "failed to load mobile nodes"
+    });
+  }
+});
+
 app.listen(PORT, "127.0.0.1", () => {
   console.log(`LoRa gateway web app listening on http://127.0.0.1:${PORT}`);
 });
@@ -138,6 +169,7 @@ app.get("/orders/new", async (req, res) => {
   const items = await dbAll(
     `SELECT * FROM item_master ORDER BY display_order`
   );
+
   res.render("order_new", { items });
 });
 
@@ -444,9 +476,37 @@ app.post("/requests/:orderId/reply", async (req, res) => {
   const offerId = makeId("off");
   const createdAt = nowIso();
 
-  const responderNode = req.body.responder_node || "mock-shelter-b";
+  // 実際の基地局BのノードID。フォームに明示値がある場合はそちらを使用。
+  const responderNode = req.body.responder_node || "0002";
   const note = req.body.note || "";
 
+  // LoRaから受信した発注のIDは lora-<ASK packet ID>。
+  // Webで直接作成した発注はLoRaへの返信対象にしない。
+  const askPktId = orderId.startsWith("lora-")
+    ? orderId.slice("lora-".length)
+    : null;
+
+  // 送信先となる発注と物資を確認。
+  const order = await dbGet(
+    `SELECT * FROM orders WHERE order_id = ?`,
+    [orderId]
+  );
+  if (!order) return res.status(404).send("Request not found");
+
+  const orderItems = await dbAll(
+    `SELECT * FROM order_items WHERE order_id = ?`,
+    [orderId]
+  );
+
+  // 全項目をチェックし、在庫0も返信内容に含める。
+  const quantities = orderItems.map(item => {
+    const raw = Number(req.body[`offer_${item.item_code}`] || 0);
+    const offeredQty = Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
+    const acceptedQty = Math.min(offeredQty, Number(item.remaining_qty));
+    return { item, offeredQty, acceptedQty };
+  });
+
+  // 既存のWeb側受注/返信処理は維持。
   await dbRun(
     `INSERT INTO offers
      (offer_id, order_id, responder_node, status, note, created_at, updated_at)
@@ -454,20 +514,7 @@ app.post("/requests/:orderId/reply", async (req, res) => {
     [offerId, orderId, responderNode, note, createdAt, createdAt]
   );
 
-  const orderItems = await dbAll(
-    `SELECT * FROM order_items WHERE order_id = ?`,
-    [orderId]
-  );
-
-  for (const item of orderItems) {
-    const field = `offer_${item.item_code}`;
-    let offeredQty = Number(req.body[field] || 0);
-
-    if (offeredQty < 0) offeredQty = 0;
-
-    // 残数以上は受けないようにする
-    const acceptedQty = Math.min(offeredQty, item.remaining_qty);
-
+  for (const { item, offeredQty, acceptedQty } of quantities) {
     if (offeredQty > 0) {
       await dbRun(
         `INSERT INTO offer_items
@@ -492,7 +539,6 @@ app.post("/requests/:orderId/reply", async (req, res) => {
      WHERE order_id = ?`,
     [orderId]
   );
-
   const newStatus =
     summary && Number(summary.total_remaining) === 0
       ? "fulfilled"
@@ -512,17 +558,35 @@ app.post("/requests/:orderId/reply", async (req, res) => {
     [orderId, offerId, JSON.stringify(req.body), createdAt]
   );
 
-  // 将来LoRaで返すReplyのモック
+  // mesh_daemon.py向けのREPLY生成依頼（LoRaバイナリではない）。
   const packet = {
     type: "ORDER_REPLY",
     order_id: orderId,
+    ask_pkt_id: askPktId,
     offer_id: offerId,
     responder_node: responderNode,
+    requester_node: order.requester_node,
+    items: quantities.map(({ item, acceptedQty }) => ({
+      item_code: item.item_code,
+      requested_qty: Number(item.requested_qty),
+      accepted_qty: acceptedQty,
+    })),
     created_at: createdAt,
   };
 
+  // 従来のWebキューを維持（raw_daemon.pyの送信キューとは別）。
   await redis.lpush("queue:lora:tx", JSON.stringify(packet));
-  await redis.publish("event:business:offer_created", JSON.stringify(packet));
+
+  if (askPktId) {
+    await redis.publish(
+      "event:business:offer_created",
+      JSON.stringify(packet)
+    );
+    console.log(
+      `[ORDER-REPLY-EVENT] ask=${askPktId} offer=${offerId}`,
+      packet.items
+    );
+  }
 
   res.redirect(`/orders/${orderId}`);
 });

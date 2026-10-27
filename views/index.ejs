@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>LoRa Gateway GPS Dashboard</title>
 
   <link rel="stylesheet" href="/css/style.css">
@@ -18,11 +19,13 @@
 </head>
 
 <body>
+
   <header>
     <h1>LoRa Gateway GPS Dashboard</h1>
   </header>
 
   <main>
+
     <nav>
       <a class="primary" href="/">GPS Dashboard</a>
       <a href="/mobile">Mobile Home</a>
@@ -31,168 +34,746 @@
       <a href="/requests">受注画面</a>
     </nav>
 
+
     <div class="card">
       <div id="map"></div>
     </div>
 
+
     <div class="grid">
+
       <div class="card">
         <h3>Position</h3>
+
         <table>
-          <tr><td>Latitude</td><td id="lat">-</td></tr>
-          <tr><td>Longitude</td><td id="lon">-</td></tr>
-          <tr><td>Altitude</td><td id="alt">-</td></tr>
-          <tr><td>Fix</td><td id="fix_status">-</td></tr>
-          <tr><td>GPS Time</td><td id="gps_time">-</td></tr>
-          <tr><td>Updated</td><td id="updated_at">-</td></tr>
+          <tr>
+            <td>Latitude</td>
+            <td id="lat">-</td>
+          </tr>
+
+          <tr>
+            <td>Longitude</td>
+            <td id="lon">-</td>
+          </tr>
+
+          <tr>
+            <td>Altitude</td>
+            <td id="alt">-</td>
+          </tr>
+
+          <tr>
+            <td>Fix</td>
+            <td id="fix_status">-</td>
+          </tr>
+
+          <tr>
+            <td>GPS Time</td>
+            <td id="gps_time">-</td>
+          </tr>
+
+          <tr>
+            <td>Updated</td>
+            <td id="updated_at">-</td>
+          </tr>
         </table>
+
       </div>
+
 
       <div class="card">
         <h3>Satellite / DOP</h3>
+
         <table>
-          <tr><td>Satellites Seen</td><td id="satellites_seen">-</td></tr>
-          <tr><td>Satellites Used</td><td id="satellites_used">-</td></tr>
-          <tr><td>HDOP</td><td id="hdop">-</td></tr>
-          <tr><td>PDOP</td><td id="pdop">-</td></tr>
-          <tr><td>TDOP</td><td id="tdop">-</td></tr>
-          <tr><td>GDOP</td><td id="gdop">-</td></tr>
+          <tr>
+            <td>Satellites Seen</td>
+            <td id="satellites_seen">-</td>
+          </tr>
+
+          <tr>
+            <td>Satellites Used</td>
+            <td id="satellites_used">-</td>
+          </tr>
+
+          <tr>
+            <td>HDOP</td>
+            <td id="hdop">-</td>
+          </tr>
+
+          <tr>
+            <td>PDOP</td>
+            <td id="pdop">-</td>
+          </tr>
+
+          <tr>
+            <td>TDOP</td>
+            <td id="tdop">-</td>
+          </tr>
+
+          <tr>
+            <td>GDOP</td>
+            <td id="gdop">-</td>
+          </tr>
         </table>
+
       </div>
+
 
       <div class="card">
         <h3>Time Sync</h3>
+
         <table>
-          <tr><td>Time Offset</td><td id="time_offset">-</td></tr>
-          <tr><td>Chrony</td><td id="chrony_status">-</td></tr>
-          <tr><td>Server Time</td><td id="server_time">-</td></tr>
+          <tr>
+            <td>Time Offset</td>
+            <td id="time_offset">-</td>
+          </tr>
+
+          <tr>
+            <td>Chrony</td>
+            <td id="chrony_status">-</td>
+          </tr>
+
+          <tr>
+            <td>Server Time</td>
+            <td id="server_time">-</td>
+          </tr>
         </table>
+
       </div>
+
 
       <div class="card">
         <h3>LoRa Queue</h3>
+
         <table>
-          <tr><td>TX Queue</td><td id="queue_tx">-</td></tr>
-          <tr><td>RX Queue</td><td id="queue_rx">-</td></tr>
+          <tr>
+            <td>TX Queue</td>
+            <td id="queue_tx">-</td>
+          </tr>
+
+          <tr>
+            <td>RX Queue</td>
+            <td id="queue_rx">-</td>
+          </tr>
         </table>
+
       </div>
+
     </div>
+
 
     <div class="card">
       <h3>Raw GPS State</h3>
+
       <pre id="raw_gps">-</pre>
     </div>
+
   </main>
 
+
   <script>
-    let map = L.map("map").setView([37.523, 139.939], 16);
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors"
-    }).addTo(map);
+    let map = L.map("map").setView(
+      [37.523, 139.939],
+      16
+    );
 
-    let marker = L.marker([37.523, 139.939]).addTo(map);
+
+    L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors"
+      }
+    ).addTo(map);
+
+
+    // ============================================================
+    // Gateway自身のGPSマーカー
+    // ============================================================
+
+    const baseStationIcon = new L.Icon({
+      iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
+      shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+
+    let marker = L.marker(
+      [37.523, 139.939],
+      { icon: baseStationIcon }
+    ).addTo(map);
+
     let firstFix = true;
 
-    function fmt(value, digits = null, suffix = "") {
-      if (value === null || value === undefined || value === "" || value === "n/a") {
+    // ============================================================
+    // LoRaで受信した移動ノード用マーカー
+    //
+    // nodeMarkers["0001"]
+    // nodeMarkers["0002"]
+    // ...
+    // ============================================================
+
+    const nodeMarkers = {};
+
+
+    function fmt(
+      value,
+      digits = null,
+      suffix = ""
+    ) {
+
+      if (
+        value === null ||
+        value === undefined ||
+        value === "" ||
+        value === "n/a"
+      ) {
         return "-";
       }
-      if (typeof value === "number" && digits !== null) {
-        return value.toFixed(digits) + suffix;
+
+
+      if (
+        typeof value === "number" &&
+        digits !== null
+      ) {
+
+        return (
+          value.toFixed(digits) +
+          suffix
+        );
+
       }
-      return String(value) + suffix;
+
+
+      return (
+        String(value) +
+        suffix
+      );
     }
 
-    function setText(id, value) {
-      const el = document.getElementById(id);
-      if (el) el.textContent = value;
+
+    function setText(
+      id,
+      value
+    ) {
+
+      const el =
+        document.getElementById(id);
+
+      if (el) {
+        el.textContent = value;
+      }
+
     }
+
 
     function classifyFix(fix) {
-      if (fix === "3D") return "ok";
-      if (fix === "2D" || fix === "FIX") return "warn";
+
+      if (fix === "3D") {
+        return "ok";
+      }
+
+
+      if (
+        fix === "2D" ||
+        fix === "FIX"
+      ) {
+        return "warn";
+      }
+
+
       return "bad";
     }
 
-    function extractTimeOffset(timeSync) {
-      if (!timeSync) return "-";
 
-      if (timeSync.offset_ms !== undefined && timeSync.offset_ms !== null) {
-        return fmt(timeSync.offset_ms, 3, " ms");
+    function extractTimeOffset(
+      timeSync
+    ) {
+
+      if (!timeSync) {
+        return "-";
       }
 
-      if (typeof timeSync.tracking === "string") {
-        const m = timeSync.tracking.match(/System time\s*:\s*([+-]?[0-9.]+)\s*seconds/i);
+
+      if (
+        timeSync.offset_ms !== undefined &&
+        timeSync.offset_ms !== null
+      ) {
+
+        return fmt(
+          timeSync.offset_ms,
+          3,
+          " ms"
+        );
+
+      }
+
+
+      if (
+        typeof timeSync.tracking ===
+        "string"
+      ) {
+
+        const m =
+          timeSync.tracking.match(
+            /System time\s*:\s*([+-]?[0-9.]+)\s*seconds/i
+          );
+
+
         if (m) {
-          const sec = Number(m[1]);
-          if (!Number.isNaN(sec)) {
-            return (sec * 1000).toFixed(3) + " ms";
+
+          const sec =
+            Number(m[1]);
+
+
+          if (
+            !Number.isNaN(sec)
+          ) {
+
+            return (
+              sec * 1000
+            ).toFixed(3) + " ms";
+
           }
+
         }
+
       }
+
 
       return "-";
     }
 
-    async function updateDashboard() {
+
+    // ============================================================
+    // LoRa mobile nodes
+    // ============================================================
+
+    async function updateNodeMarkers() {
+
       try {
-        const res = await fetch("/api/state", { cache: "no-store" });
-        const state = await res.json();
 
-        const gps = state.gps || {};
-        const timeSync = state.time_sync || {};
-        const queue = state.queue || {};
+        const res =
+          await fetch(
+            "/api/nodes",
+            {
+              cache: "no-store"
+            }
+          );
 
-        const lat = Number(gps.lat);
-        const lon = Number(gps.lon);
 
-        if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
-          marker.setLatLng([lat, lon]);
+        if (!res.ok) {
+
+          throw new Error(
+            `HTTP ${res.status}`
+          );
+
+        }
+
+
+        const data =
+          await res.json();
+
+
+        const nodes =
+          data.nodes || [];
+
+
+        for (
+          const node of nodes
+        ) {
+
+          const nodeId =
+            String(
+              node.node_id
+            );
+
+
+          const lat =
+            Number(
+              node.lat
+            );
+
+
+          const lon =
+            Number(
+              node.lon
+            );
+
+
+          if (
+            Number.isNaN(lat) ||
+            Number.isNaN(lon)
+          ) {
+
+            continue;
+
+          }
+
+
+          // --------------------------------------------------------
+          // 既存ノードなら座標だけ更新
+          // --------------------------------------------------------
+
+          if (
+            nodeMarkers[nodeId]
+          ) {
+
+            nodeMarkers[nodeId]
+              .setLatLng([
+                lat,
+                lon
+              ]);
+
+          }
+
+          // --------------------------------------------------------
+          // 初めて受信したノード
+          // --------------------------------------------------------
+
+          else {
+
+            nodeMarkers[nodeId] =
+              L.marker([
+                lat,
+                lon
+              ]).addTo(map);
+
+          }
+
+
+          // --------------------------------------------------------
+          // Popup
+          // --------------------------------------------------------
+
+          nodeMarkers[nodeId]
+            .bindPopup(
+              `Node: ${nodeId}<br>` +
+              `Lat: ${lat.toFixed(7)}<br>` +
+              `Lon: ${lon.toFixed(7)}`
+            );
+
+        }
+
+
+      } catch (err) {
+
+        console.error(
+          "[NODE-MARKER-ERR]",
+          err
+        );
+
+      }
+
+    }
+
+
+    // ============================================================
+    // Dashboard
+    // ============================================================
+
+    async function updateDashboard() {
+
+      try {
+
+        const res =
+          await fetch(
+            "/api/state",
+            {
+              cache: "no-store"
+            }
+          );
+
+
+        const state =
+          await res.json();
+
+
+        const gps =
+          state.self || state.gps || {};
+
+
+        const timeSync =
+          state.time_sync || {};
+
+
+        const queue =
+          state.queue || {};
+
+
+        const lat =
+          Number(
+            gps.lat
+          );
+
+
+        const lon =
+          Number(
+            gps.lon
+          );
+
+
+        // ========================================================
+        // Gateway自身の位置
+        // ========================================================
+
+        if (
+          !Number.isNaN(lat) &&
+          !Number.isNaN(lon)
+        ) {
+
+          marker.setLatLng([
+            lat,
+            lon
+          ]);
+
+
           marker.bindPopup(
             `Lat: ${lat.toFixed(7)}<br>` +
             `Lon: ${lon.toFixed(7)}<br>` +
-            `Alt: ${fmt(gps.alt, 2, " m")}`
+            `Alt: ${fmt(
+              gps.alt,
+              2,
+              " m"
+            )}`
           );
 
+
           if (firstFix) {
-            map.setView([lat, lon], 17);
+
+            map.setView(
+              [
+                lat,
+                lon
+              ],
+              17
+            );
+
+
             firstFix = false;
+
           }
+
         }
 
-        setText("lat", fmt(gps.lat, 8));
-        setText("lon", fmt(gps.lon, 8));
-        setText("alt", fmt(gps.alt, 2, " m"));
-        setText("fix_status", fmt(gps.fix_status || gps.mode));
-        document.getElementById("fix_status").className = classifyFix(gps.fix_status);
 
-        setText("gps_time", fmt(gps.gps_time));
-        setText("updated_at", fmt(gps.updated_at));
+        // ========================================================
+        // Position
+        // ========================================================
 
-        setText("satellites_seen", fmt(gps.satellites_seen));
-        setText("satellites_used", fmt(gps.satellites_used));
-        setText("hdop", fmt(gps.hdop, 2));
-        setText("pdop", fmt(gps.pdop, 2));
-        setText("tdop", fmt(gps.tdop, 2));
-        setText("gdop", fmt(gps.gdop, 2));
+        setText(
+          "lat",
+          fmt(
+            gps.lat,
+            8
+          )
+        );
 
-        setText("time_offset", extractTimeOffset(timeSync));
-        setText("chrony_status", timeSync.tracking ? "available" : "-");
-        setText("server_time", fmt(state.server_time));
 
-        setText("queue_tx", fmt(queue.lora_tx));
-        setText("queue_rx", fmt(queue.lora_rx));
+        setText(
+          "lon",
+          fmt(
+            gps.lon,
+            8
+          )
+        );
 
-        setText("raw_gps", JSON.stringify(gps, null, 2));
+
+        setText(
+          "alt",
+          fmt(
+            gps.alt,
+            2,
+            " m"
+          )
+        );
+
+
+        setText(
+          "fix_status",
+          fmt(
+            gps.fix_status ||
+            gps.mode
+          )
+        );
+
+
+        document
+          .getElementById(
+            "fix_status"
+          )
+          .className =
+            classifyFix(
+              gps.fix_status
+            );
+
+
+        setText(
+          "gps_time",
+          fmt(
+            gps.gps_time
+          )
+        );
+
+
+        setText(
+          "updated_at",
+          fmt(
+            gps.updated_at
+          )
+        );
+
+
+        // ========================================================
+        // Satellite
+        // ========================================================
+
+        setText(
+          "satellites_seen",
+          fmt(
+            gps.satellites_seen
+          )
+        );
+
+
+        setText(
+          "satellites_used",
+          fmt(
+            gps.satellites_used
+          )
+        );
+
+
+        setText(
+          "hdop",
+          fmt(
+            gps.hdop,
+            2
+          )
+        );
+
+
+        setText(
+          "pdop",
+          fmt(
+            gps.pdop,
+            2
+          )
+        );
+
+
+        setText(
+          "tdop",
+          fmt(
+            gps.tdop,
+            2
+          )
+        );
+
+
+        setText(
+          "gdop",
+          fmt(
+            gps.gdop,
+            2
+          )
+        );
+
+
+        // ========================================================
+        // Time
+        // ========================================================
+
+        setText(
+          "time_offset",
+          extractTimeOffset(
+            timeSync
+          )
+        );
+
+
+        setText(
+          "chrony_status",
+          timeSync.tracking
+            ? "available"
+            : "-"
+        );
+
+
+        setText(
+          "server_time",
+          fmt(
+            state.server_time
+          )
+        );
+
+
+        // ========================================================
+        // LoRa Queue
+        // ========================================================
+
+        setText(
+          "queue_tx",
+          fmt(
+            queue.lora_tx
+          )
+        );
+
+
+        setText(
+          "queue_rx",
+          fmt(
+            queue.lora_rx
+          )
+        );
+
+
+        // ========================================================
+        // Raw GPS
+        // ========================================================
+
+        setText(
+          "raw_gps",
+          JSON.stringify(
+            gps,
+            null,
+            2
+          )
+        );
+
+
+        // ========================================================
+        // Mobile node markers
+        // ========================================================
+
+        await updateNodeMarkers();
+
+
       } catch (err) {
-        console.error(err);
+
+        console.error(
+          err
+        );
+
       }
+
     }
 
+
+    // ============================================================
+    // Start
+    // ============================================================
+
     updateDashboard();
-    setInterval(updateDashboard, 1000);
+
+    setInterval(
+      updateDashboard,
+      1000
+    );
+
   </script>
+
 </body>
 </html>
