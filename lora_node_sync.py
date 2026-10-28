@@ -14,6 +14,7 @@ REDIS_PORT = 6379
 REDIS_DB = 0
 REDIS_NODE_PATTERN = "lora:nodes:*"
 REDIS_RECEIVED_ORDERS = "lora:orders:received"
+REDIS_RECEIVED_REPLIES = "lora:orders:replies"
 SQLITE_PATH = "/var/lib/lora-gateway/gateway.db"
 SYNC_INTERVAL_SEC = 1.0
 ORDER_SYNC_INTERVAL_SEC = 5.0
@@ -335,6 +336,89 @@ def sync_received_orders(r, conn):
     return added
 
 
+
+# ============================================================
+# Received LoRa order REPLY -> sender Web offers / offer_items
+# ============================================================
+
+def sync_one_order_reply(conn, record):
+    if not isinstance(record, dict) or record.get("source") != "LORA_ORDER_REPLY":
+        return False
+    ask_pkt_id = str(record.get("ask_pkt_id") or "")
+    order_id = str(record.get("order_id") or "")
+    item_code = str(record.get("item_code") or "")
+    responder = str(record.get("responder_node") or "")
+    try:
+        qty = int(record["accepted_qty"])
+    except (KeyError, ValueError, TypeError):
+        return False
+    if not ask_pkt_id or not order_id or not item_code or not responder or qty < 0:
+        return False
+    offer_id = "lora-reply-" + ask_pkt_id
+    if conn.execute("SELECT 1 FROM offers WHERE offer_id=?", (offer_id,)).fetchone():
+        return False
+    row = conn.execute(
+        "SELECT id, requested_qty, remaining_qty FROM order_items "
+        "WHERE order_id=? AND item_code=?",
+        (order_id, item_code),
+    ).fetchone()
+    if row is None:
+        print(f"[LORA-REPLY-SKIP] unknown order/item: {order_id}/{item_code}", flush=True)
+        return False
+    remaining = int(row["remaining_qty"])
+    if qty > remaining:
+        print(f"[LORA-REPLY-SKIP] qty > remaining: {order_id} {qty}>{remaining}", flush=True)
+        return False
+    now = utc_now_iso()
+    conn.execute(
+        "INSERT INTO offers (offer_id, order_id, responder_node, status, note, "
+        "created_at, updated_at) VALUES (?, ?, ?, 'offered', ?, ?, ?)",
+        (offer_id, order_id, responder,
+         f"LoRa REPLY ask_pkt_id={ask_pkt_id}" + (" / 在庫なし" if qty == 0 else ""), now, now),
+    )
+    # Persist the zero-quantity row as well, so the Web UI can display
+    # an explicit stock-out response instead of an empty offer.
+    conn.execute(
+        "INSERT INTO offer_items (offer_id, item_code, offered_qty, accepted_qty) "
+        "VALUES (?, ?, ?, ?)",
+        (offer_id, item_code, qty, qty),
+    )
+    if qty > 0:
+        conn.execute(
+            "UPDATE order_items SET accepted_qty=accepted_qty+?, "
+            "remaining_qty=MAX(remaining_qty-?,0) WHERE id=?",
+            (qty, qty, row["id"]),
+        )
+    summary = conn.execute(
+        "SELECT SUM(remaining_qty) FROM order_items WHERE order_id=?", (order_id,)
+    ).fetchone()
+    status = "fulfilled" if summary[0] is not None and int(summary[0]) == 0 else "open"
+    conn.execute(
+        "UPDATE orders SET status=?, updated_at=? WHERE order_id=?",
+        (status, now, order_id),
+    )
+    print(f"[LORA-REPLY-SYNC] order={order_id} item={item_code} "
+          f"accepted={qty} responder={responder}", flush=True)
+    return True
+
+
+def sync_received_order_replies(r, conn):
+    added = 0
+    for raw in reversed(r.lrange(REDIS_RECEIVED_REPLIES, 0, -1)):
+        record = json_loads_safe(raw)
+        if not isinstance(record, dict):
+            continue
+        try:
+            # Atomically insert offer and update the order quantities.
+            with conn:
+                if sync_one_order_reply(conn, record):
+                    added += 1
+        except sqlite3.Error as exc:
+            print(f"[LORA-REPLY-SYNC-ERR] ask={record.get('ask_pkt_id')} {exc}",
+                  flush=True)
+    return added
+
+
 def main():
     r = redis.Redis(
         host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
@@ -365,6 +449,7 @@ def main():
         if time.monotonic() - last_order_sync >= ORDER_SYNC_INTERVAL_SEC:
             try:
                 sync_received_orders(r, conn)
+                sync_received_order_replies(r, conn)
             except Exception as exc:
                 conn.rollback()
                 print(f"[LORA-ORDER-SYNC-ERR] {exc}", flush=True)
