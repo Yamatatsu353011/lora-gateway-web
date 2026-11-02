@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const Redis = require("ioredis");
 const sqlite3 = require("sqlite3").verbose();
+const path = require("path");
 
 const app = express();
 
@@ -10,9 +11,11 @@ const PORT = process.env.PORT || 3000;
 const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6379";
 const SQLITE_PATH = process.env.SQLITE_PATH || "/var/lib/lora-gateway/gateway.db";
 
+// 基地局ごとに.envで指定する
+const LORA_NODE_ID = process.env.LORA_NODE_ID || null;
+
 const redis = new Redis(REDIS_URL);
 const db = new sqlite3.Database(SQLITE_PATH);
-const path = require("path");
 
 function dbAll(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -73,12 +76,20 @@ function makeBstXyLabel(zx, zy, xtile, ytile) {
   return `XY:zx${zx}:zy${zy}:x${xtile}:y${ytile}`;
 }
 
+// ============================================================
+// Express setup
+// ============================================================
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 app.use(express.static(path.join(__dirname, "public")));
+
+// ============================================================
+// Home
+// ============================================================
 
 app.get("/", async (req, res) => {
   res.render("index");
@@ -87,6 +98,10 @@ app.get("/", async (req, res) => {
 app.get("/mobile", (req, res) => {
   res.render("mobile_home");
 });
+
+// ============================================================
+// Legacy LoRa text send
+// ============================================================
 
 app.post("/send", async (req, res) => {
   const packet = {
@@ -102,6 +117,10 @@ app.post("/send", async (req, res) => {
 
   res.redirect("/");
 });
+
+// ============================================================
+// API: gateway state
+// ============================================================
 
 app.get("/api/state", async (req, res) => {
   function parseJsonOrNull(value) {
@@ -134,6 +153,10 @@ app.get("/api/state", async (req, res) => {
   res.json(result);
 });
 
+// ============================================================
+// API: mobile nodes
+// ============================================================
+
 app.get("/api/nodes", async (req, res) => {
   try {
     const nodes = await dbAll(
@@ -148,9 +171,8 @@ app.get("/api/nodes", async (req, res) => {
        ORDER BY node_id`
     );
 
-    res.json({
-      nodes: nodes
-    });
+    res.json({ nodes });
+
   } catch (err) {
     console.error("[API-NODES-ERR]", err);
 
@@ -161,9 +183,9 @@ app.get("/api/nodes", async (req, res) => {
   }
 });
 
-app.listen(PORT, "127.0.0.1", () => {
-  console.log(`LoRa gateway web app listening on http://127.0.0.1:${PORT}`);
-});
+// ============================================================
+// New order page
+// ============================================================
 
 app.get("/orders/new", async (req, res) => {
   const items = await dbAll(
@@ -173,18 +195,22 @@ app.get("/orders/new", async (req, res) => {
   res.render("order_new", { items });
 });
 
+// ============================================================
+// ASK: create order
+// ============================================================
+
 app.post("/orders", async (req, res) => {
   const orderId = makeId("ord");
   const createdAt = nowIso();
 
-  const requesterNode = req.body.requester_node || "dev-gateway-a";
+  const requesterNode =
+    LORA_NODE_ID || req.body.requester_node || "dev-gateway-a";
+
   const note = req.body.note || "";
 
-  // Clicked point
   const clickedLat = parseOptionalNumber(req.body.target_lat);
   const clickedLon = parseOptionalNumber(req.body.target_lon);
 
-  // BST-ID / tile quantization fields
   const targetZx = parseOptionalNumber(req.body.target_zx);
   const targetZy = parseOptionalNumber(req.body.target_zy);
   const targetXtile = parseOptionalNumber(req.body.target_xtile);
@@ -239,18 +265,11 @@ app.post("/orders", async (req, res) => {
       orderId,
       requesterNode,
       targetArea,
-
-      // clicked point
       clickedLat,
       clickedLon,
-
-      // legacy columns: keep for compatibility
       targetZx,
       null,
-
       targetAreaLabel,
-
-      // BST tile columns
       targetZx,
       targetZy,
       targetXtile,
@@ -260,7 +279,6 @@ app.post("/orders", async (req, res) => {
       targetWest,
       targetEast,
       targetBstXy,
-
       note,
       createdAt,
       createdAt,
@@ -345,8 +363,6 @@ app.post("/orders", async (req, res) => {
     ]
   );
 
-  // ここではRedis Queueへは入れない。
-  // LoRa側が後で business_events または business_outbox を読む想定。
   await redis.publish(
     "event:business:order_created",
     JSON.stringify(businessMessage)
@@ -354,6 +370,10 @@ app.post("/orders", async (req, res) => {
 
   res.redirect(`/orders/${orderId}`);
 });
+
+// ============================================================
+// Order list
+// ============================================================
 
 app.get("/orders", async (req, res) => {
   const orders = await dbAll(
@@ -370,6 +390,10 @@ app.get("/orders", async (req, res) => {
 
   res.render("orders", { orders });
 });
+
+// ============================================================
+// Order detail
+// ============================================================
 
 app.get("/orders/:orderId", async (req, res) => {
   const orderId = req.params.orderId;
@@ -403,6 +427,7 @@ app.get("/orders/:orderId", async (req, res) => {
     [orderId]
   );
 
+  // JOIN item_master is required for im.item_name / im.unit.
   const offerItems = await dbAll(
     `SELECT
        ofi.*,
@@ -410,19 +435,22 @@ app.get("/orders/:orderId", async (req, res) => {
        o.responder_node,
        im.item_name,
        im.unit
-    FROM offer_items ofi
-    JOIN offers o ON ofi.offer_id = o.offer_id
-    JOIN item_master im ON ofi.item_code = im.item_code
-    WHERE o.order_id = ?
-    ORDER BY o.id DESC, im.display_order`,
-   [orderId]
+     FROM offer_items ofi
+     JOIN offers o ON ofi.offer_id = o.offer_id
+     JOIN item_master im ON ofi.item_code = im.item_code
+     WHERE o.order_id = ?
+     ORDER BY o.id DESC, im.display_order`,
+    [orderId]
   );
-  
-  // NEW: 受領通知の送信キュー登録状況
+
+  // ----------------------------------------------------------
+  // REPLY(C): local receipt queue status
+  // ----------------------------------------------------------
+
   const receiptStatus = {};
 
   for (const offer of offers) {
-    if (offer.offer_id.startsWith("lora-reply-")) {
+    if (String(offer.offer_id).startsWith("lora-reply-")) {
       const askId = offer.offer_id.slice("lora-reply-".length);
 
       receiptStatus[offer.offer_id] = Boolean(
@@ -431,17 +459,42 @@ app.get("/orders/:orderId", async (req, res) => {
     }
   }
 
+  // ----------------------------------------------------------
+  // REPLY(C): received receipts stored in SQLite
+  //
+  // A and B share app.js. Some existing DBs may not have
+  // order_receipts until lora_node_sync.py creates it.
+  // ----------------------------------------------------------
+
+  let receipts = [];
+
+  const receiptTable = await dbGet(
+    `SELECT name FROM sqlite_master
+     WHERE type = 'table' AND name = 'order_receipts'`
+  );
+
+  if (receiptTable) {
+    receipts = await dbAll(
+      `SELECT *
+       FROM order_receipts
+       WHERE order_id = ?
+       ORDER BY received_at DESC`,
+      [orderId]
+    );
+  }
+
   res.render("order_detail", {
     order,
     items,
     offers,
     offerItems,
     receiptStatus,
+    receipts,
   });
 });
 
 // ============================================================
-// NEW: REPLY(C) 物資受領通知
+// REPLY(C): send receipt confirmation from requester BASE
 // ============================================================
 
 app.post("/orders/:orderId/receipt", async (req, res) => {
@@ -449,7 +502,6 @@ app.post("/orders/:orderId/receipt", async (req, res) => {
     const orderId = req.params.orderId;
     const offerId = String(req.body.offer_id || "").trim();
 
-    // LoRaのREPLY(P)による回答だけを対象にする
     if (!offerId.startsWith("lora-reply-")) {
       return res.status(400).send(
         "LoRaからの回答のみ受領確認できます"
@@ -462,22 +514,22 @@ app.post("/orders/:orderId/receipt", async (req, res) => {
       return res.status(400).send("Invalid ASK packet ID");
     }
 
-    // フォームの数量や送信先は信用せず、
-    // SQLiteの回答情報から取得する
+    // --------------------------------------------------------
+    // Retrieve the actual offer from SQLite
+    // --------------------------------------------------------
+
     const rows = await dbAll(
       `SELECT
          o.responder_node,
          oi.item_code,
          oi.accepted_qty
        FROM offers o
-       JOIN offer_items oi
-         ON oi.offer_id = o.offer_id
+       JOIN offer_items oi ON oi.offer_id = o.offer_id
        WHERE o.offer_id = ?
          AND o.order_id = ?`,
       [offerId, orderId]
     );
 
-    // 現仕様：1 ASKにつき1物資
     if (rows.length !== 1) {
       return res.status(409).send(
         "回答が見つからないか、複数品目の回答です"
@@ -487,14 +539,16 @@ app.post("/orders/:orderId/receipt", async (req, res) => {
     const offer = rows[0];
     const receivedQty = Number(offer.accepted_qty);
 
-    // 在庫なし（0個）への受領確認は発行しない
     if (!Number.isInteger(receivedQty) || receivedQty <= 0) {
       return res.status(409).send(
         "受領対象の数量がありません"
       );
     }
 
-    // 元のASK・受信済みREPLY(P)・回答元位置を確認
+    // --------------------------------------------------------
+    // Validate the ASK / REPLY(P) / responder position
+    // --------------------------------------------------------
+
     const [originalRaw, replyRaw, targetRaw] = await Promise.all([
       redis.get(`lora:orders:outgoing:${askPktId}`),
       redis.get(`lora:orders:reply_received:${askPktId}`),
@@ -509,26 +563,31 @@ app.post("/orders/:orderId/receipt", async (req, res) => {
 
     const original = JSON.parse(originalRaw);
     const reply = JSON.parse(replyRaw);
+    const target = JSON.parse(targetRaw);
 
     if (
-      original.order_id !== orderId ||
-      original.item_code !== offer.item_code ||
+      String(original.order_id) !== String(orderId) ||
+      String(original.item_code) !== String(offer.item_code) ||
       Number(reply.accepted_qty) !== receivedQty ||
-      String(reply.responder_node) !== String(offer.responder_node)
+      String(reply.responder_node) !== String(offer.responder_node) ||
+      String(target.responder_node) !== String(offer.responder_node)
     ) {
       return res.status(409).send(
         "発注情報と回答情報が一致しません"
       );
     }
 
-    // 同じASKに対する受領通知の二重登録を防ぐ
+    // Already queued by mesh_daemon.py
     if (await redis.exists(`lora:orders:receipt_tx:${askPktId}`)) {
       return res.status(409).send(
         "この物資の受領通知は送信キュー登録済みです"
       );
     }
 
-    // mesh_daemon.pyが受信するイベント
+    // --------------------------------------------------------
+    // Notify mesh_daemon.py
+    // --------------------------------------------------------
+
     const event = {
       type: "ORDER_RECEIPT",
       order_id: orderId,
@@ -564,6 +623,10 @@ app.post("/orders/:orderId/receipt", async (req, res) => {
   }
 });
 
+// ============================================================
+// Requests list
+// ============================================================
+
 app.get("/requests", async (req, res) => {
   const orders = await dbAll(
     `SELECT
@@ -580,6 +643,10 @@ app.get("/requests", async (req, res) => {
 
   res.render("requests", { orders });
 });
+
+// ============================================================
+// REPLY(P): reply input page
+// ============================================================
 
 app.get("/requests/:orderId/reply", async (req, res) => {
   const orderId = req.params.orderId;
@@ -609,23 +676,36 @@ app.get("/requests/:orderId/reply", async (req, res) => {
   res.render("request_reply", { order, items });
 });
 
+// ============================================================
+// REPLY(P): create offer
+// ============================================================
+
 app.post("/requests/:orderId/reply", async (req, res) => {
   const orderId = req.params.orderId;
   const offerId = makeId("off");
   const createdAt = nowIso();
 
-  // 実際の基地局BのノードID。
-  // フォームに明示値がある場合はそちらを使用。
-  const responderNode = req.body.responder_node || "0002";
+  // ----------------------------------------------------------
+  // Use the local BASE node ID, not the mock form value.
+  // Both A and B use this same app.js.
+  // ----------------------------------------------------------
+
+  const responderNode = LORA_NODE_ID;
+
+  if (!responderNode || !/^\d{4}$/.test(responderNode)) {
+    return res.status(500).send(
+      "LORA_NODE_IDが未設定です。.envに0001または0002を設定してください。"
+    );
+  }
+
   const note = req.body.note || "";
 
-  // LoRaから受信した発注のIDは lora-<ASK packet ID>。
-  // Webで直接作成した発注はLoRaへの返信対象にしない。
+  // LoRa ASK received by the current BASE:
+  // local SQLite order_id = lora-<ASK packet ID>
   const askPktId = orderId.startsWith("lora-")
     ? orderId.slice("lora-".length)
     : null;
 
-  // 送信先となる発注と物資を確認。
   const order = await dbGet(
     `SELECT * FROM orders WHERE order_id = ?`,
     [orderId]
@@ -640,18 +720,28 @@ app.post("/requests/:orderId/reply", async (req, res) => {
     [orderId]
   );
 
-  // 全項目をチェックし、在庫0も返信内容に含める。
   const quantities = orderItems.map(item => {
     const raw = Number(req.body[`offer_${item.item_code}`] || 0);
-    const offeredQty = Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
-    const acceptedQty = Math.min(offeredQty, Number(item.remaining_qty));
+    const offeredQty = Number.isFinite(raw)
+      ? Math.max(0, Math.floor(raw))
+      : 0;
+
+    const acceptedQty = Math.min(
+      offeredQty,
+      Number(item.remaining_qty)
+    );
+
     return { item, offeredQty, acceptedQty };
   });
 
-  // 既存のWeb側受注/返信処理は維持。
+  // ----------------------------------------------------------
+  // Existing Web offer registration
+  // ----------------------------------------------------------
+
   await dbRun(
     `INSERT INTO offers
-     (offer_id, order_id, responder_node, status, note, created_at, updated_at)
+     (offer_id, order_id, responder_node, status, note,
+      created_at, updated_at)
      VALUES (?, ?, ?, 'offered', ?, ?, ?)`,
     [offerId, orderId, responderNode, note, createdAt, createdAt]
   );
@@ -701,7 +791,10 @@ app.post("/requests/:orderId/reply", async (req, res) => {
     [orderId, offerId, JSON.stringify(req.body), createdAt]
   );
 
-  // mesh_daemon.py向けのREPLY生成依頼（LoRaバイナリではない）。
+  // ----------------------------------------------------------
+  // REPLY(P) event for mesh_daemon.py
+  // ----------------------------------------------------------
+
   const packet = {
     type: "ORDER_REPLY",
     order_id: orderId,
@@ -717,8 +810,11 @@ app.post("/requests/:orderId/reply", async (req, res) => {
     created_at: createdAt,
   };
 
-  // 従来のWebキューを維持（raw_daemon.pyの送信キューとは別）。
-  await redis.lpush("queue:lora:tx", JSON.stringify(packet));
+  // Preserve the previous Web queue.
+  await redis.lpush(
+    "queue:lora:tx",
+    JSON.stringify(packet)
+  );
 
   if (askPktId) {
     await redis.publish(
@@ -733,4 +829,15 @@ app.post("/requests/:orderId/reply", async (req, res) => {
   }
 
   res.redirect(`/orders/${orderId}`);
+});
+
+// ============================================================
+// Start server
+// ============================================================
+
+app.listen(PORT, "127.0.0.1", () => {
+  console.log(
+    `LoRa gateway web app listening on http://127.0.0.1:${PORT}`
+  );
+  console.log(`[LORA-NODE-ID] ${LORA_NODE_ID || "(not configured)"}`);
 });
