@@ -410,13 +410,14 @@ app.get("/orders/:orderId", async (req, res) => {
        o.responder_node,
        im.item_name,
        im.unit
-     FROM offer_items ofi
-     JOIN offers o ON ofi.offer_id = o.offer_id
-     WHERE o.order_id = ?
-     ORDER BY o.id DESC, im.display_order`,
-    [orderId]
+    FROM offer_items ofi
+    JOIN offers o ON ofi.offer_id = o.offer_id
+    JOIN item_master im ON ofi.item_code = im.item_code
+    WHERE o.order_id = ?
+    ORDER BY o.id DESC, im.display_order`,
+   [orderId]
   );
-
+  
   // NEW: 受領通知の送信キュー登録状況
   const receiptStatus = {};
 
