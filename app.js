@@ -412,18 +412,155 @@ app.get("/orders/:orderId", async (req, res) => {
        im.unit
      FROM offer_items ofi
      JOIN offers o ON ofi.offer_id = o.offer_id
-     JOIN item_master im ON ofi.item_code = im.item_code
      WHERE o.order_id = ?
      ORDER BY o.id DESC, im.display_order`,
     [orderId]
   );
+
+  // NEW: 受領通知の送信キュー登録状況
+  const receiptStatus = {};
+
+  for (const offer of offers) {
+    if (offer.offer_id.startsWith("lora-reply-")) {
+      const askId = offer.offer_id.slice("lora-reply-".length);
+
+      receiptStatus[offer.offer_id] = Boolean(
+        await redis.exists(`lora:orders:receipt_tx:${askId}`)
+      );
+    }
+  }
 
   res.render("order_detail", {
     order,
     items,
     offers,
     offerItems,
+    receiptStatus,
   });
+});
+
+// ============================================================
+// NEW: REPLY(C) 物資受領通知
+// ============================================================
+
+app.post("/orders/:orderId/receipt", async (req, res) => {
+  try {
+    const orderId = req.params.orderId;
+    const offerId = String(req.body.offer_id || "").trim();
+
+    // LoRaのREPLY(P)による回答だけを対象にする
+    if (!offerId.startsWith("lora-reply-")) {
+      return res.status(400).send(
+        "LoRaからの回答のみ受領確認できます"
+      );
+    }
+
+    const askPktId = offerId.slice("lora-reply-".length);
+
+    if (!/^[0-9A-Za-z]+-[0-9A-Za-z]+$/.test(askPktId)) {
+      return res.status(400).send("Invalid ASK packet ID");
+    }
+
+    // フォームの数量や送信先は信用せず、
+    // SQLiteの回答情報から取得する
+    const rows = await dbAll(
+      `SELECT
+         o.responder_node,
+         oi.item_code,
+         oi.accepted_qty
+       FROM offers o
+       JOIN offer_items oi
+         ON oi.offer_id = o.offer_id
+       WHERE o.offer_id = ?
+         AND o.order_id = ?`,
+      [offerId, orderId]
+    );
+
+    // 現仕様：1 ASKにつき1物資
+    if (rows.length !== 1) {
+      return res.status(409).send(
+        "回答が見つからないか、複数品目の回答です"
+      );
+    }
+
+    const offer = rows[0];
+    const receivedQty = Number(offer.accepted_qty);
+
+    // 在庫なし（0個）への受領確認は発行しない
+    if (!Number.isInteger(receivedQty) || receivedQty <= 0) {
+      return res.status(409).send(
+        "受領対象の数量がありません"
+      );
+    }
+
+    // 元のASK・受信済みREPLY(P)・回答元位置を確認
+    const [originalRaw, replyRaw, targetRaw] = await Promise.all([
+      redis.get(`lora:orders:outgoing:${askPktId}`),
+      redis.get(`lora:orders:reply_received:${askPktId}`),
+      redis.get(`lora:orders:reply_position:${askPktId}`),
+    ]);
+
+    if (!originalRaw || !replyRaw || !targetRaw) {
+      return res.status(409).send(
+        "元のASK/REPLY/送信先位置が未登録です"
+      );
+    }
+
+    const original = JSON.parse(originalRaw);
+    const reply = JSON.parse(replyRaw);
+
+    if (
+      original.order_id !== orderId ||
+      original.item_code !== offer.item_code ||
+      Number(reply.accepted_qty) !== receivedQty ||
+      String(reply.responder_node) !== String(offer.responder_node)
+    ) {
+      return res.status(409).send(
+        "発注情報と回答情報が一致しません"
+      );
+    }
+
+    // 同じASKに対する受領通知の二重登録を防ぐ
+    if (await redis.exists(`lora:orders:receipt_tx:${askPktId}`)) {
+      return res.status(409).send(
+        "この物資の受領通知は送信キュー登録済みです"
+      );
+    }
+
+    // mesh_daemon.pyが受信するイベント
+    const event = {
+      type: "ORDER_RECEIPT",
+      order_id: orderId,
+      ask_pkt_id: askPktId,
+      responder_node: offer.responder_node,
+      received_qty: receivedQty,
+      created_at: nowIso(),
+    };
+
+    const listeners = await redis.publish(
+      "event:business:receipt_created",
+      JSON.stringify(event)
+    );
+
+    if (listeners < 1) {
+      return res.status(503).send(
+        "mesh_daemon.pyが受領イベントを購読していません"
+      );
+    }
+
+    console.log(
+      `[ORDER-RECEIPT-EVENT] ask=${askPktId} qty=${receivedQty}`
+    );
+
+    res.redirect(`/orders/${encodeURIComponent(orderId)}`);
+
+  } catch (err) {
+    console.error("[ORDER-RECEIPT-ERR]", err);
+
+    res.status(500).send(
+      "受領通知イベントの発行に失敗しました"
+    );
+  }
 });
 
 app.get("/requests", async (req, res) => {
@@ -476,7 +613,8 @@ app.post("/requests/:orderId/reply", async (req, res) => {
   const offerId = makeId("off");
   const createdAt = nowIso();
 
-  // 実際の基地局BのノードID。フォームに明示値がある場合はそちらを使用。
+  // 実際の基地局BのノードID。
+  // フォームに明示値がある場合はそちらを使用。
   const responderNode = req.body.responder_node || "0002";
   const note = req.body.note || "";
 
@@ -491,7 +629,10 @@ app.post("/requests/:orderId/reply", async (req, res) => {
     `SELECT * FROM orders WHERE order_id = ?`,
     [orderId]
   );
-  if (!order) return res.status(404).send("Request not found");
+
+  if (!order) {
+    return res.status(404).send("Request not found");
+  }
 
   const orderItems = await dbAll(
     `SELECT * FROM order_items WHERE order_id = ?`,
@@ -539,6 +680,7 @@ app.post("/requests/:orderId/reply", async (req, res) => {
      WHERE order_id = ?`,
     [orderId]
   );
+
   const newStatus =
     summary && Number(summary.total_remaining) === 0
       ? "fulfilled"
@@ -582,6 +724,7 @@ app.post("/requests/:orderId/reply", async (req, res) => {
       "event:business:offer_created",
       JSON.stringify(packet)
     );
+
     console.log(
       `[ORDER-REPLY-EVENT] ask=${askPktId} offer=${offerId}`,
       packet.items
