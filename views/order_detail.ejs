@@ -21,16 +21,30 @@
       <a class="primary" href="/requests/<%= order.order_id %>/reply">この発注に受注Reply</a>
     </nav>
 
+    <!-- ===================================================== -->
+    <!-- 基本情報 -->
+    <!-- ===================================================== -->
+
     <div class="card">
       <h2>基本情報</h2>
+
       <table>
-        <tr><th>Order ID</th><td><%= order.order_id %></td></tr>
-        <tr><th>発注ノード</th><td><%= order.requester_node %></td></tr>
-        <tr><th>対象領域</th><td><%= order.target_area %></td></tr>
+        <tr>
+          <th>Order ID</th>
+          <td><%= order.order_id %></td>
+        </tr>
+        <tr>
+          <th>発注ノード</th>
+          <td><%= order.requester_node %></td>
+        </tr>
+        <tr>
+          <th>対象領域</th>
+          <td><%= order.target_area %></td>
+        </tr>
         <tr>
           <th>対象点</th>
           <td>
-            <% if (order.target_lat && order.target_lon) { %>
+            <% if (order.target_lat != null && order.target_lon != null) { %>
               <%= Number(order.target_lat).toFixed(8) %>,
               <%= Number(order.target_lon).toFixed(8) %>
             <% } else { %>
@@ -38,7 +52,6 @@
             <% } %>
           </td>
         </tr>
-
         <tr>
           <th>対象範囲</th>
           <td>
@@ -50,48 +63,88 @@
             <% } %>
           </td>
         </tr>
-
         <tr>
           <th>対象領域ラベル</th>
           <td><%= order.target_area_label || "-" %></td>
         </tr>
-        <tr><th>状態</th><td class="status-<%= order.status %>"><%= order.status %></td></tr>
-        <tr><th>備考</th><td><%= order.note %></td></tr>
-        <tr><th>作成日時</th><td><%= order.created_at %></td></tr>
-        <tr><th>更新日時</th><td><%= order.updated_at %></td></tr>
+        <tr>
+          <th>状態</th>
+          <td class="status-<%= order.status %>">
+            <%= order.status %>
+          </td>
+        </tr>
+        <tr>
+          <th>備考</th>
+          <td><%= order.note || "-" %></td>
+        </tr>
+        <tr>
+          <th>作成日時</th>
+          <td><%= order.created_at %></td>
+        </tr>
+        <tr>
+          <th>更新日時</th>
+          <td><%= order.updated_at %></td>
+        </tr>
       </table>
     </div>
 
+    <!-- ===================================================== -->
+    <!-- 物資別充足状況 -->
+    <!-- ===================================================== -->
+
     <div class="card">
       <h2>物資別充足状況</h2>
+
       <table class="responsive-table">
         <thead>
           <tr>
             <th>カテゴリ</th>
             <th>品目</th>
             <th>必要数</th>
-            <th>受け数</th>
+            <th>提供確定数</th>
+            <th>実際の受領数</th>
             <th>残数</th>
             <th>単位</th>
           </tr>
         </thead>
+
         <tbody>
           <% items.forEach(i => { %>
             <tr>
-              <td data-label="カテゴリ"><%= i.category %></td>
-              <td data-label="品目"><%= i.item_name %></td>
-              <td data-label="必要数"><%= i.requested_qty %></td>
-              <td data-label="受け数"><%= i.accepted_qty %></td>
-              <td data-label="残数"><%= i.remaining_qty %></td>
-              <td data-label="単位"><%= i.unit %></td>
+              <td data-label="カテゴリ">
+                <%= i.category %>
+              </td>
+              <td data-label="品目">
+                <%= i.item_name %>
+              </td>
+              <td data-label="必要数">
+                <%= i.requested_qty %>
+              </td>
+              <td data-label="提供確定数">
+                <%= i.accepted_qty %>
+              </td>
+              <td data-label="実際の受領数">
+                <%= i.fulfilled_qty %>
+              </td>
+              <td data-label="残数">
+                <%= i.remaining_qty %>
+              </td>
+              <td data-label="単位">
+                <%= i.unit %>
+              </td>
             </tr>
           <% }) %>
         </tbody>
       </table>
     </div>
 
+    <!-- ===================================================== -->
+    <!-- 受注Reply一覧 -->
+    <!-- ===================================================== -->
+
     <div class="card">
       <h2>受注Reply一覧</h2>
+
       <table class="responsive-table">
         <thead>
           <tr>
@@ -102,22 +155,39 @@
             <th>作成日時</th>
           </tr>
         </thead>
+
         <tbody>
           <% offers.forEach(o => { %>
             <tr>
-              <td data-label="Offer ID"><%= o.offer_id %></td>
-              <td data-label="応答ノード"><%= o.responder_node %></td>
-              <td data-label="状態"><%= o.status %></td>
-              <td data-label="備考"><%= o.note %></td>
-              <td data-label="作成日時"><%= o.created_at %></td>
+              <td data-label="Offer ID">
+                <%= o.offer_id %>
+              </td>
+              <td data-label="応答ノード">
+                <%= o.responder_node %>
+              </td>
+              <td data-label="状態">
+                <%= o.status %>
+              </td>
+              <td data-label="備考">
+                <%= o.note || "-" %>
+              </td>
+              <td data-label="作成日時">
+                <%= o.created_at %>
+              </td>
             </tr>
           <% }) %>
         </tbody>
       </table>
     </div>
 
+    <!-- ===================================================== -->
+    <!-- 受注Reply内訳 -->
+    <!-- 基地局Aでは受領確認ボタンを表示 -->
+    <!-- ===================================================== -->
+
     <div class="card">
       <h2>受注Reply内訳</h2>
+
       <table class="responsive-table">
         <thead>
           <tr>
@@ -130,21 +200,39 @@
             <th>受領確認</th>
           </tr>
         </thead>
+
         <tbody>
           <% offerItems.forEach(i => { %>
             <tr>
-              <td data-label="Offer ID"><%= i.offer_id %></td>
-              <td data-label="応答ノード"><%= i.responder_node %></td>
-              <td data-label="品目"><%= i.item_name %></td>
-              <td data-label="提供可能数"><%= i.offered_qty %></td>
-              <td data-label="受け入れ数"><%= i.accepted_qty %></td>
-              <td data-label="単位"><%= i.unit %></td>
+              <td data-label="Offer ID">
+                <%= i.offer_id %>
+              </td>
+              <td data-label="応答ノード">
+                <%= i.responder_node %>
+              </td>
+              <td data-label="品目">
+                <%= i.item_name %>
+              </td>
+              <td data-label="提供可能数">
+                <%= i.offered_qty %>
+              </td>
+              <td data-label="受け入れ数">
+                <%= i.accepted_qty %>
+              </td>
+              <td data-label="単位">
+                <%= i.unit %>
+              </td>
 
-              <!-- NEW: REPLY(C) 受領確認 -->
+              <!-- NEW: REPLY(C)送信 -->
               <td data-label="受領確認">
+
                 <%
-                  const isLoraReply = String(i.offer_id).startsWith("lora-reply-");
-                  const hasQuantity = Number(i.accepted_qty) > 0;
+                  const isLoraReply =
+                    String(i.offer_id).startsWith("lora-reply-");
+
+                  const hasQuantity =
+                    Number(i.accepted_qty) > 0;
+
                   const isReceiptQueued =
                     typeof receiptStatus !== "undefined" &&
                     receiptStatus[i.offer_id];
@@ -154,7 +242,9 @@
 
                   <% if (isReceiptQueued) { %>
 
-                    <span>送信キュー登録済み（到達未確認）</span>
+                    <span>
+                      送信キュー登録済み（到達未確認）
+                    </span>
 
                   <% } else { %>
 
@@ -177,11 +267,89 @@
                   <% } %>
 
                 <% } else { %>
+
                   -
+
                 <% } %>
+
               </td>
             </tr>
           <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- NEW: 物資受領状況 -->
+    <!-- 基地局BではREPLY(C)受信後に表示 -->
+    <!-- ===================================================== -->
+
+    <div class="card">
+      <h2>物資受領状況</h2>
+
+      <table class="responsive-table">
+        <thead>
+          <tr>
+            <th>ASK ID</th>
+            <th>品目</th>
+            <th>受領数量</th>
+            <th>発注元</th>
+            <th>受領先</th>
+            <th>状態</th>
+            <th>受領日時</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <% if (typeof receipts === "undefined" || receipts.length === 0) { %>
+
+            <tr>
+              <td colspan="7">
+                受領通知はありません
+              </td>
+            </tr>
+
+          <% } else { %>
+
+            <% receipts.forEach(r => { %>
+              <tr>
+                <td data-label="ASK ID">
+                  <%= r.ask_pkt_id %>
+                </td>
+
+                <td data-label="品目">
+                  <%
+                    const matchedItem = items.find(
+                      i => i.item_code === r.item_code
+                    );
+                  %>
+
+                  <%= matchedItem ? matchedItem.item_name : r.item_code %>
+                </td>
+
+                <td data-label="受領数量">
+                  <%= r.received_qty %>
+                </td>
+
+                <td data-label="発注元">
+                  <%= r.origin_node %>
+                </td>
+
+                <td data-label="受領先">
+                  <%= r.received_by %>
+                </td>
+
+                <td data-label="状態">
+                  <strong>受領完了</strong>
+                </td>
+
+                <td data-label="受領日時">
+                  <%= r.received_at %>
+                </td>
+              </tr>
+            <% }) %>
+
+          <% } %>
         </tbody>
       </table>
     </div>
