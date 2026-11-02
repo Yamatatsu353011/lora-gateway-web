@@ -3,7 +3,6 @@ require("dotenv").config();
 const express = require("express");
 const Redis = require("ioredis");
 const sqlite3 = require("sqlite3").verbose();
-const path = require("path");
 
 const app = express();
 
@@ -11,11 +10,20 @@ const PORT = process.env.PORT || 3000;
 const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6379";
 const SQLITE_PATH = process.env.SQLITE_PATH || "/var/lib/lora-gateway/gateway.db";
 
-// 基地局ごとに.envで指定する
-const LORA_NODE_ID = process.env.LORA_NODE_ID || null;
-
 const redis = new Redis(REDIS_URL);
 const db = new sqlite3.Database(SQLITE_PATH);
+
+// LoRa config.OWN_ID is published by mesh_daemon.py into this local Redis.
+const LOCAL_NODE_ID_KEY = "lora:gateway:local_node_id";
+
+async function getLocalNodeId() {
+  const nodeId = await redis.get(LOCAL_NODE_ID_KEY);
+  if (!nodeId || !/^\d{4}$/.test(nodeId)) {
+    throw new Error("LoRa基地局の識別情報を取得できません（mesh_daemon.py / Redisを確認）");
+  }
+  return nodeId;
+}
+const path = require("path");
 
 function dbAll(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -76,20 +84,12 @@ function makeBstXyLabel(zx, zy, xtile, ytile) {
   return `XY:zx${zx}:zy${zy}:x${xtile}:y${ytile}`;
 }
 
-// ============================================================
-// Express setup
-// ============================================================
-
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 app.use(express.static(path.join(__dirname, "public")));
-
-// ============================================================
-// Home
-// ============================================================
 
 app.get("/", async (req, res) => {
   res.render("index");
@@ -98,10 +98,6 @@ app.get("/", async (req, res) => {
 app.get("/mobile", (req, res) => {
   res.render("mobile_home");
 });
-
-// ============================================================
-// Legacy LoRa text send
-// ============================================================
 
 app.post("/send", async (req, res) => {
   const packet = {
@@ -117,10 +113,6 @@ app.post("/send", async (req, res) => {
 
   res.redirect("/");
 });
-
-// ============================================================
-// API: gateway state
-// ============================================================
 
 app.get("/api/state", async (req, res) => {
   function parseJsonOrNull(value) {
@@ -153,10 +145,6 @@ app.get("/api/state", async (req, res) => {
   res.json(result);
 });
 
-// ============================================================
-// API: mobile nodes
-// ============================================================
-
 app.get("/api/nodes", async (req, res) => {
   try {
     const nodes = await dbAll(
@@ -171,8 +159,9 @@ app.get("/api/nodes", async (req, res) => {
        ORDER BY node_id`
     );
 
-    res.json({ nodes });
-
+    res.json({
+      nodes: nodes
+    });
   } catch (err) {
     console.error("[API-NODES-ERR]", err);
 
@@ -183,9 +172,9 @@ app.get("/api/nodes", async (req, res) => {
   }
 });
 
-// ============================================================
-// New order page
-// ============================================================
+app.listen(PORT, "127.0.0.1", () => {
+  console.log(`LoRa gateway web app listening on http://127.0.0.1:${PORT}`);
+});
 
 app.get("/orders/new", async (req, res) => {
   const items = await dbAll(
@@ -195,22 +184,24 @@ app.get("/orders/new", async (req, res) => {
   res.render("order_new", { items });
 });
 
-// ============================================================
-// ASK: create order
-// ============================================================
-
 app.post("/orders", async (req, res) => {
   const orderId = makeId("ord");
   const createdAt = nowIso();
 
-  const requesterNode =
-    LORA_NODE_ID || req.body.requester_node || "dev-gateway-a";
-
+  let requesterNode;
+  try {
+    requesterNode = await getLocalNodeId();
+  } catch (err) {
+    console.error("[ORDER-CREATE-NODE-ID]", err);
+    return res.status(503).send("LoRa基地局の識別情報を取得できません");
+  }
   const note = req.body.note || "";
 
+  // Clicked point
   const clickedLat = parseOptionalNumber(req.body.target_lat);
   const clickedLon = parseOptionalNumber(req.body.target_lon);
 
+  // BST-ID / tile quantization fields
   const targetZx = parseOptionalNumber(req.body.target_zx);
   const targetZy = parseOptionalNumber(req.body.target_zy);
   const targetXtile = parseOptionalNumber(req.body.target_xtile);
@@ -265,11 +256,18 @@ app.post("/orders", async (req, res) => {
       orderId,
       requesterNode,
       targetArea,
+
+      // clicked point
       clickedLat,
       clickedLon,
+
+      // legacy columns: keep for compatibility
       targetZx,
       null,
+
       targetAreaLabel,
+
+      // BST tile columns
       targetZx,
       targetZy,
       targetXtile,
@@ -279,6 +277,7 @@ app.post("/orders", async (req, res) => {
       targetWest,
       targetEast,
       targetBstXy,
+
       note,
       createdAt,
       createdAt,
@@ -363,6 +362,8 @@ app.post("/orders", async (req, res) => {
     ]
   );
 
+  // ここではRedis Queueへは入れない。
+  // LoRa側が後で business_events または business_outbox を読む想定。
   await redis.publish(
     "event:business:order_created",
     JSON.stringify(businessMessage)
@@ -370,10 +371,6 @@ app.post("/orders", async (req, res) => {
 
   res.redirect(`/orders/${orderId}`);
 });
-
-// ============================================================
-// Order list
-// ============================================================
 
 app.get("/orders", async (req, res) => {
   const orders = await dbAll(
@@ -390,10 +387,6 @@ app.get("/orders", async (req, res) => {
 
   res.render("orders", { orders });
 });
-
-// ============================================================
-// Order detail
-// ============================================================
 
 app.get("/orders/:orderId", async (req, res) => {
   const orderId = req.params.orderId;
@@ -427,7 +420,6 @@ app.get("/orders/:orderId", async (req, res) => {
     [orderId]
   );
 
-  // JOIN item_master is required for im.item_name / im.unit.
   const offerItems = await dbAll(
     `SELECT
        ofi.*,
@@ -443,40 +435,28 @@ app.get("/orders/:orderId", async (req, res) => {
     [orderId]
   );
 
-  // ----------------------------------------------------------
-  // REPLY(C): local receipt queue status
-  // ----------------------------------------------------------
-
+  // Local status of the receipt command queued at the requester BASE.
+  // Queued does not mean received by the remote BASE.
   const receiptStatus = {};
-
   for (const offer of offers) {
     if (String(offer.offer_id).startsWith("lora-reply-")) {
       const askId = offer.offer_id.slice("lora-reply-".length);
-
       receiptStatus[offer.offer_id] = Boolean(
         await redis.exists(`lora:orders:receipt_tx:${askId}`)
       );
     }
   }
 
-  // ----------------------------------------------------------
-  // REPLY(C): received receipts stored in SQLite
-  //
-  // A and B share app.js. Some existing DBs may not have
-  // order_receipts until lora_node_sync.py creates it.
-  // ----------------------------------------------------------
-
+  // Received confirmations saved at the responder BASE by lora_node_sync.py.
+  // A and B share the same Web source; older local databases may lack this table.
   let receipts = [];
-
   const receiptTable = await dbGet(
     `SELECT name FROM sqlite_master
      WHERE type = 'table' AND name = 'order_receipts'`
   );
-
   if (receiptTable) {
     receipts = await dbAll(
-      `SELECT *
-       FROM order_receipts
+      `SELECT * FROM order_receipts
        WHERE order_id = ?
        ORDER BY received_at DESC`,
       [orderId]
@@ -493,78 +473,47 @@ app.get("/orders/:orderId", async (req, res) => {
   });
 });
 
-// ============================================================
-// REPLY(C): send receipt confirmation from requester BASE
-// ============================================================
-
+// Requester BASE: after physically receiving items, request one REPLY(C).
+// The mesh daemon is responsible for generating and queueing the LoRa packet.
 app.post("/orders/:orderId/receipt", async (req, res) => {
   try {
     const orderId = req.params.orderId;
     const offerId = String(req.body.offer_id || "").trim();
-
     if (!offerId.startsWith("lora-reply-")) {
-      return res.status(400).send(
-        "LoRaからの回答のみ受領確認できます"
-      );
+      return res.status(400).send("LoRaからの回答のみ受領確認できます");
     }
 
     const askPktId = offerId.slice("lora-reply-".length);
-
     if (!/^[0-9A-Za-z]+-[0-9A-Za-z]+$/.test(askPktId)) {
       return res.status(400).send("Invalid ASK packet ID");
     }
 
-    // --------------------------------------------------------
-    // Retrieve the actual offer from SQLite
-    // --------------------------------------------------------
-
     const rows = await dbAll(
-      `SELECT
-         o.responder_node,
-         oi.item_code,
-         oi.accepted_qty
-       FROM offers o
-       JOIN offer_items oi ON oi.offer_id = o.offer_id
-       WHERE o.offer_id = ?
-         AND o.order_id = ?`,
+      `SELECT o.responder_node, oi.item_code, oi.accepted_qty
+       FROM offers o JOIN offer_items oi ON oi.offer_id = o.offer_id
+       WHERE o.offer_id = ? AND o.order_id = ?`,
       [offerId, orderId]
     );
-
     if (rows.length !== 1) {
-      return res.status(409).send(
-        "回答が見つからないか、複数品目の回答です"
-      );
+      return res.status(409).send("回答が見つからないか、複数品目の回答です");
     }
-
     const offer = rows[0];
     const receivedQty = Number(offer.accepted_qty);
-
     if (!Number.isInteger(receivedQty) || receivedQty <= 0) {
-      return res.status(409).send(
-        "受領対象の数量がありません"
-      );
+      return res.status(409).send("受領対象の数量がありません");
     }
-
-    // --------------------------------------------------------
-    // Validate the ASK / REPLY(P) / responder position
-    // --------------------------------------------------------
 
     const [originalRaw, replyRaw, targetRaw] = await Promise.all([
       redis.get(`lora:orders:outgoing:${askPktId}`),
       redis.get(`lora:orders:reply_received:${askPktId}`),
       redis.get(`lora:orders:reply_position:${askPktId}`),
     ]);
-
     if (!originalRaw || !replyRaw || !targetRaw) {
-      return res.status(409).send(
-        "元のASK/REPLY/送信先位置が未登録です"
-      );
+      return res.status(409).send("元のASK/REPLY/送信先位置が未登録です");
     }
-
     const original = JSON.parse(originalRaw);
     const reply = JSON.parse(replyRaw);
     const target = JSON.parse(targetRaw);
-
     if (
       String(original.order_id) !== String(orderId) ||
       String(original.item_code) !== String(offer.item_code) ||
@@ -572,21 +521,12 @@ app.post("/orders/:orderId/receipt", async (req, res) => {
       String(reply.responder_node) !== String(offer.responder_node) ||
       String(target.responder_node) !== String(offer.responder_node)
     ) {
-      return res.status(409).send(
-        "発注情報と回答情報が一致しません"
-      );
+      return res.status(409).send("発注情報と回答情報が一致しません");
     }
 
-    // Already queued by mesh_daemon.py
     if (await redis.exists(`lora:orders:receipt_tx:${askPktId}`)) {
-      return res.status(409).send(
-        "この物資の受領通知は送信キュー登録済みです"
-      );
+      return res.status(409).send("この物資の受領通知は送信キュー登録済みです");
     }
-
-    // --------------------------------------------------------
-    // Notify mesh_daemon.py
-    // --------------------------------------------------------
 
     const event = {
       type: "ORDER_RECEIPT",
@@ -601,31 +541,16 @@ app.post("/orders/:orderId/receipt", async (req, res) => {
       "event:business:receipt_created",
       JSON.stringify(event)
     );
-
     if (listeners < 1) {
-      return res.status(503).send(
-        "mesh_daemon.pyが受領イベントを購読していません"
-      );
+      return res.status(503).send("mesh_daemon.pyが受領イベントを購読していません");
     }
-
-    console.log(
-      `[ORDER-RECEIPT-EVENT] ask=${askPktId} qty=${receivedQty}`
-    );
-
+    console.log(`[ORDER-RECEIPT-EVENT] ask=${askPktId} qty=${receivedQty}`);
     res.redirect(`/orders/${encodeURIComponent(orderId)}`);
-
   } catch (err) {
     console.error("[ORDER-RECEIPT-ERR]", err);
-
-    res.status(500).send(
-      "受領通知イベントの発行に失敗しました"
-    );
+    res.status(500).send("受領通知イベントの発行に失敗しました");
   }
 });
-
-// ============================================================
-// Requests list
-// ============================================================
 
 app.get("/requests", async (req, res) => {
   const orders = await dbAll(
@@ -643,10 +568,6 @@ app.get("/requests", async (req, res) => {
 
   res.render("requests", { orders });
 });
-
-// ============================================================
-// REPLY(P): reply input page
-// ============================================================
 
 app.get("/requests/:orderId/reply", async (req, res) => {
   const orderId = req.params.orderId;
@@ -676,72 +597,52 @@ app.get("/requests/:orderId/reply", async (req, res) => {
   res.render("request_reply", { order, items });
 });
 
-// ============================================================
-// REPLY(P): create offer
-// ============================================================
-
 app.post("/requests/:orderId/reply", async (req, res) => {
   const orderId = req.params.orderId;
   const offerId = makeId("off");
   const createdAt = nowIso();
 
-  // ----------------------------------------------------------
-  // Use the local BASE node ID, not the mock form value.
-  // Both A and B use this same app.js.
-  // ----------------------------------------------------------
-
-  const responderNode = LORA_NODE_ID;
-
-  if (!responderNode || !/^\d{4}$/.test(responderNode)) {
-    return res.status(500).send(
-      "LORA_NODE_IDが未設定です。.envに0001または0002を設定してください。"
-    );
+  // Always use this BASE's identity as configured in mesh_daemon.py.
+  // Do not trust the responder_node value submitted by the HTML form.
+  let responderNode;
+  try {
+    responderNode = await getLocalNodeId();
+  } catch (err) {
+    console.error("[ORDER-REPLY-NODE-ID]", err);
+    return res.status(503).send("LoRa基地局の識別情報を取得できません");
   }
-
   const note = req.body.note || "";
 
-  // LoRa ASK received by the current BASE:
-  // local SQLite order_id = lora-<ASK packet ID>
+  // LoRaから受信した発注のIDは lora-<ASK packet ID>。
+  // Webで直接作成した発注はLoRaへの返信対象にしない。
   const askPktId = orderId.startsWith("lora-")
     ? orderId.slice("lora-".length)
     : null;
 
+  // 送信先となる発注と物資を確認。
   const order = await dbGet(
     `SELECT * FROM orders WHERE order_id = ?`,
     [orderId]
   );
-
-  if (!order) {
-    return res.status(404).send("Request not found");
-  }
+  if (!order) return res.status(404).send("Request not found");
 
   const orderItems = await dbAll(
     `SELECT * FROM order_items WHERE order_id = ?`,
     [orderId]
   );
 
+  // 全項目をチェックし、在庫0も返信内容に含める。
   const quantities = orderItems.map(item => {
     const raw = Number(req.body[`offer_${item.item_code}`] || 0);
-    const offeredQty = Number.isFinite(raw)
-      ? Math.max(0, Math.floor(raw))
-      : 0;
-
-    const acceptedQty = Math.min(
-      offeredQty,
-      Number(item.remaining_qty)
-    );
-
+    const offeredQty = Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
+    const acceptedQty = Math.min(offeredQty, Number(item.remaining_qty));
     return { item, offeredQty, acceptedQty };
   });
 
-  // ----------------------------------------------------------
-  // Existing Web offer registration
-  // ----------------------------------------------------------
-
+  // 既存のWeb側受注/返信処理は維持。
   await dbRun(
     `INSERT INTO offers
-     (offer_id, order_id, responder_node, status, note,
-      created_at, updated_at)
+     (offer_id, order_id, responder_node, status, note, created_at, updated_at)
      VALUES (?, ?, ?, 'offered', ?, ?, ?)`,
     [offerId, orderId, responderNode, note, createdAt, createdAt]
   );
@@ -771,7 +672,6 @@ app.post("/requests/:orderId/reply", async (req, res) => {
      WHERE order_id = ?`,
     [orderId]
   );
-
   const newStatus =
     summary && Number(summary.total_remaining) === 0
       ? "fulfilled"
@@ -791,10 +691,7 @@ app.post("/requests/:orderId/reply", async (req, res) => {
     [orderId, offerId, JSON.stringify(req.body), createdAt]
   );
 
-  // ----------------------------------------------------------
-  // REPLY(P) event for mesh_daemon.py
-  // ----------------------------------------------------------
-
+  // mesh_daemon.py向けのREPLY生成依頼（LoRaバイナリではない）。
   const packet = {
     type: "ORDER_REPLY",
     order_id: orderId,
@@ -810,18 +707,14 @@ app.post("/requests/:orderId/reply", async (req, res) => {
     created_at: createdAt,
   };
 
-  // Preserve the previous Web queue.
-  await redis.lpush(
-    "queue:lora:tx",
-    JSON.stringify(packet)
-  );
+  // 従来のWebキューを維持（raw_daemon.pyの送信キューとは別）。
+  await redis.lpush("queue:lora:tx", JSON.stringify(packet));
 
   if (askPktId) {
     await redis.publish(
       "event:business:offer_created",
       JSON.stringify(packet)
     );
-
     console.log(
       `[ORDER-REPLY-EVENT] ask=${askPktId} offer=${offerId}`,
       packet.items
@@ -829,15 +722,4 @@ app.post("/requests/:orderId/reply", async (req, res) => {
   }
 
   res.redirect(`/orders/${orderId}`);
-});
-
-// ============================================================
-// Start server
-// ============================================================
-
-app.listen(PORT, "127.0.0.1", () => {
-  console.log(
-    `LoRa gateway web app listening on http://127.0.0.1:${PORT}`
-  );
-  console.log(`[LORA-NODE-ID] ${LORA_NODE_ID || "(not configured)"}`);
 });
