@@ -151,7 +151,9 @@
                 %>
 
                 <% if (isLoraReply && hasQuantity) { %>
-                  <% if (!isReceiptQueued) { %>
+                  <% if (isReceiptQueued) { %>
+                    <strong>✅ 受領確認済み</strong>
+                  <% } else { %>
                     <form
                       method="POST"
                       action="/orders/<%= encodeURIComponent(order.order_id) %>/receipt"
@@ -176,6 +178,7 @@
     </div>
 
     <!-- REPLY(C) 受領記録：基地局B側 -->
+    <% if (String(order.order_id).startsWith("lora-")) { %>
     <div class="card">
       <h2>物資受領状況</h2>
       <table class="responsive-table">
@@ -209,6 +212,7 @@
         </tbody>
       </table>
     </div>
+    <% } %>
 
   </main>
 </body>
