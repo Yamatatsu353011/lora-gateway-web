@@ -127,6 +127,7 @@
             <th>提供可能数</th>
             <th>受け入れ数</th>
             <th>単位</th>
+            <th>受領確認</th>
           </tr>
         </thead>
         <tbody>
@@ -138,11 +139,53 @@
               <td data-label="提供可能数"><%= i.offered_qty %></td>
               <td data-label="受け入れ数"><%= i.accepted_qty %></td>
               <td data-label="単位"><%= i.unit %></td>
+
+              <!-- NEW: REPLY(C) 受領確認 -->
+              <td data-label="受領確認">
+                <%
+                  const isLoraReply = String(i.offer_id).startsWith("lora-reply-");
+                  const hasQuantity = Number(i.accepted_qty) > 0;
+                  const isReceiptQueued =
+                    typeof receiptStatus !== "undefined" &&
+                    receiptStatus[i.offer_id];
+                %>
+
+                <% if (isLoraReply && hasQuantity) { %>
+
+                  <% if (isReceiptQueued) { %>
+
+                    <span>送信キュー登録済み（到達未確認）</span>
+
+                  <% } else { %>
+
+                    <form
+                      method="POST"
+                      action="/orders/<%= encodeURIComponent(order.order_id) %>/receipt"
+                      onsubmit="return confirm('物資を実際に受け取りましたか？');"
+                    >
+                      <input
+                        type="hidden"
+                        name="offer_id"
+                        value="<%= i.offer_id %>"
+                      >
+
+                      <button type="submit">
+                        受け取り完了を通知
+                      </button>
+                    </form>
+
+                  <% } %>
+
+                <% } else { %>
+                  -
+                <% } %>
+              </td>
             </tr>
           <% }) %>
         </tbody>
       </table>
     </div>
+
   </main>
 </body>
 </html>
