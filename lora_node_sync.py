@@ -15,6 +15,7 @@ REDIS_DB = 0
 REDIS_NODE_PATTERN = "lora:nodes:*"
 REDIS_RECEIVED_ORDERS = "lora:orders:received"
 REDIS_RECEIVED_REPLIES = "lora:orders:replies"
+REDIS_RECEIVED_RECEIPTS = "lora:orders:receipts"
 SQLITE_PATH = "/var/lib/lora-gateway/gateway.db"
 SYNC_INTERVAL_SEC = 1.0
 ORDER_SYNC_INTERVAL_SEC = 5.0
@@ -157,6 +158,22 @@ def ensure_schema(conn):
         )
         """
     )
+
+    # REPLY(C): one receipt confirmation per ASK.
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS order_receipts (
+            ask_pkt_id TEXT PRIMARY KEY,
+            order_id TEXT NOT NULL,
+            origin_node TEXT NOT NULL,
+            received_by TEXT NOT NULL,
+            item_code TEXT NOT NULL,
+            requested_qty INTEGER NOT NULL,
+            received_qty INTEGER NOT NULL,
+            received_at TEXT NOT NULL,
+            synced_at TEXT NOT NULL
+        )"""
+    )
+
     conn.commit()
 
 
@@ -336,7 +353,6 @@ def sync_received_orders(r, conn):
     return added
 
 
-
 # ============================================================
 # Received LoRa order REPLY -> sender Web offers / offer_items
 # ============================================================
@@ -419,6 +435,114 @@ def sync_received_order_replies(r, conn):
     return added
 
 
+# ============================================================
+# Received REPLY(C) -> SQLite receipt / fulfilled quantity
+# ============================================================
+
+def sync_one_order_receipt(conn, record):
+    if not isinstance(record, dict) or record.get("source") != "LORA_ORDER_RECEIPT":
+        return False
+
+    ask_id = str(record.get("ask_pkt_id") or "")
+    order_id = str(record.get("order_id") or "")
+    origin = str(record.get("origin_node") or "")
+    responder = str(record.get("received_by") or "")
+    item_code = str(record.get("item_code") or "")
+
+    try:
+        requested = int(record["requested_qty"])
+        received = int(record["received_qty"])
+        received_at = datetime.fromtimestamp(
+            float(record["received_at"]), timezone.utc
+        ).isoformat()
+    except (KeyError, ValueError, TypeError, OverflowError, OSError):
+        return False
+
+    if (not all((ask_id, order_id, origin, responder, item_code))
+            or "-" not in ask_id or ask_id.split("-", 1)[0] != origin
+            or order_id != f"lora-{ask_id}" or not 0 < received <= requested):
+        return False
+
+    # 同じASKについて受領記録は1つだけ
+    if conn.execute(
+        "SELECT 1 FROM order_receipts WHERE ask_pkt_id=?", (ask_id,)
+    ).fetchone():
+        return False
+
+    # 元の発注内容を確認
+    row = conn.execute(
+        """SELECT o.requester_node, i.id, i.requested_qty,
+                  i.accepted_qty, i.fulfilled_qty
+           FROM orders o JOIN order_items i ON o.order_id=i.order_id
+           WHERE o.order_id=? AND i.item_code=?""",
+        (order_id, item_code),
+    ).fetchone()
+
+    if (row is None or str(row["requester_node"]) != origin
+            or int(row["requested_qty"]) != requested):
+        return False
+
+    # 受注元がWebで回答した提供数量と照合
+    offered = conn.execute(
+        """SELECT COALESCE(SUM(oi.accepted_qty), 0)
+           FROM offers o JOIN offer_items oi ON o.offer_id=oi.offer_id
+           WHERE o.order_id=? AND o.responder_node=? AND oi.item_code=?""",
+        (order_id, responder, item_code),
+    ).fetchone()[0]
+
+    if (received != int(offered)
+            or int(row["fulfilled_qty"]) + received > int(row["accepted_qty"])):
+        print(f"[LORA-RECEIPT-SKIP] unmatched offer ask={ask_id}", flush=True)
+        return False
+
+    now = utc_now_iso()
+
+    # 受領記録を保存
+    conn.execute(
+        """INSERT INTO order_receipts
+           (ask_pkt_id, order_id, origin_node, received_by, item_code,
+            requested_qty, received_qty, received_at, synced_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (ask_id, order_id, origin, responder, item_code,
+         requested, received, received_at, now),
+    )
+
+    # 実際に受領された数量を反映
+    conn.execute(
+        "UPDATE order_items SET fulfilled_qty=fulfilled_qty+? WHERE id=?",
+        (received, row["id"]),
+    )
+
+    conn.execute(
+        "UPDATE orders SET updated_at=? WHERE order_id=?", (now, order_id)
+    )
+
+    print(
+        f"[LORA-RECEIPT-SYNC] ask={ask_id} "
+        f"item={item_code} qty={received}",
+        flush=True,
+    )
+    return True
+
+
+def sync_received_order_receipts(r, conn):
+    added = 0
+
+    for raw in reversed(r.lrange(REDIS_RECEIVED_RECEIPTS, 0, -1)):
+        record = json_loads_safe(raw)
+
+        try:
+            # 受領記録の追加と数量更新を同じトランザクションで実行
+            with conn:
+                if sync_one_order_receipt(conn, record):
+                    added += 1
+
+        except sqlite3.Error as exc:
+            print(f"[LORA-RECEIPT-SYNC-ERR] {exc}", flush=True)
+
+    return added
+
+
 def main():
     r = redis.Redis(
         host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
@@ -450,6 +574,7 @@ def main():
             try:
                 sync_received_orders(r, conn)
                 sync_received_order_replies(r, conn)
+                sync_received_order_receipts(r, conn)
             except Exception as exc:
                 conn.rollback()
                 print(f"[LORA-ORDER-SYNC-ERR] {exc}", flush=True)
