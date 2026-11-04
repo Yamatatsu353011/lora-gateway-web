@@ -292,3 +292,173 @@ LoRa通信自体は`lora-mesh-daemon`で処理し、Web側ではRedisとSQLite�
 https://github.com/Yamatatsu353011/lora-mesh-daemon
 
 LoRa送受信、ASK/REPLY、Duplicate Suppression、BST-ID指向性転送などを担当します。
+
+## Windows＋WSL環境でのセットアップ
+
+Windows環境ではWSL（Ubuntu）上でWebアプリケーションを実行します。
+
+`lora-mesh-daemon`はWindows側、`lora-gateway-web`はWSL側にインストールします。
+
+### 1. WSLの導入
+
+WindowsのPowerShellを管理者として開きます。
+
+```powershell
+wsl --install -d Ubuntu-22.04
+```
+
+インストール後、必要に応じて再起動します。
+
+Ubuntuを起動：
+
+```powershell
+wsl -d Ubuntu-22.04
+```
+
+以降のコマンドは、WSLのUbuntuターミナルで実行します。
+
+### 2. 必要なパッケージ
+
+```bash
+sudo apt update
+
+sudo apt install -y \
+  git \
+  redis-server \
+  sqlite3 \
+  python3 \
+  python3-venv \
+  python3-pip \
+  build-essential \
+  curl
+```
+
+Node.jsは22系を使用します。
+
+Node.js 22が導入済みであることを確認してください。
+
+```bash
+node -v
+npm -v
+```
+
+### 3. リポジトリの取得
+
+```bash
+cd /opt
+
+sudo git clone https://github.com/Yamatatsu353011/lora-gateway-web.git
+
+sudo chown -R $USER:$USER /opt/lora-gateway-web
+```
+
+### 4. Node.js環境
+
+```bash
+cd /opt/lora-gateway-web
+
+npm install
+```
+
+`sqlite3`のネイティブモジュールでエラーが発生する場合：
+
+```bash
+npm rebuild sqlite3 --build-from-source
+```
+
+### 5. Python環境
+
+```bash
+cd /opt/lora-gateway-web
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install redis
+```
+
+### 6. Redis
+
+```bash
+sudo service redis-server start
+
+redis-cli ping
+```
+
+正常時：
+
+```text
+PONG
+```
+
+### 7. Web設定
+
+```bash
+cd /opt/lora-gateway-web
+
+nano .env
+```
+
+設定例：
+
+```env
+PORT=3000
+REDIS_URL=redis://127.0.0.1:6379
+SQLITE_PATH=/var/lib/lora-gateway/gateway.db
+```
+
+Windows側のLoRaプログラムと同じRedisサーバーを参照してください。
+
+### 8. SQLite
+
+```bash
+sudo mkdir -p /var/lib/lora-gateway
+sudo chown -R $USER:$USER /var/lib/lora-gateway
+```
+
+既存のデータベースがある場合は、テーブルを確認します。
+
+```bash
+sqlite3 /var/lib/lora-gateway/gateway.db ".tables"
+```
+
+※ 新規環境では発注・受注に必要なテーブルの初期化が必要です。既存DBの構造に対応したSQLを準備してください。
+
+### 9. プログラム起動
+
+WSLのUbuntuターミナルを2つ使用します。
+
+**ターミナル1：Webサーバー**
+
+```bash
+cd /opt/lora-gateway-web
+
+node app.js
+```
+
+**ターミナル2：SQLite同期**
+
+```bash
+cd /opt/lora-gateway-web
+
+source .venv/bin/activate
+
+python lora_node_sync.py
+```
+
+### 10. Webアクセス
+
+Windowsのブラウザからアクセスします。
+
+```text
+http://localhost:3000/
+```
+
+### 注意事項
+
+- `sudo apt`はWSL側で実行します。
+- `npm install`もWSL側で実行します。
+- RedisとSQLiteはWSL側で管理します。
+- Windows側のLoRa通信プログラムとRedisの接続を確認してください。
+- WindowsとWSLのPython仮想環境は別々です。
+- WSLでインストールしたPythonライブラリは、Windows側のPythonには反映されません。
