@@ -21,6 +21,17 @@ SYNC_INTERVAL_SEC = 1.0
 ORDER_SYNC_INTERVAL_SEC = 5.0
 
 
+def _base36(n):
+    chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    if n <= 0:
+        return "0"
+    result = ""
+    while n:
+        n, digit = divmod(n, 36)
+        result = chars[digit] + result
+    return result
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -159,10 +170,12 @@ def ensure_schema(conn):
         """
     )
 
-    # REPLY(C): one receipt confirmation per ASK.
+    # New receipts must be identified by reply, not by ASK.
     conn.execute(
         """CREATE TABLE IF NOT EXISTS order_receipts (
-            ask_pkt_id TEXT PRIMARY KEY,
+            reply_id TEXT PRIMARY KEY,
+            offer_id TEXT,
+            ask_pkt_id TEXT NOT NULL,
             order_id TEXT NOT NULL,
             origin_node TEXT NOT NULL,
             received_by TEXT NOT NULL,
@@ -173,7 +186,37 @@ def ensure_schema(conn):
             synced_at TEXT NOT NULL
         )"""
     )
-
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(order_receipts)")}
+    if "reply_id" not in columns:
+        # Preserve old receipts, which had ask_pkt_id as the PRIMARY KEY.
+        # A table rebuild is required to allow multiple receipts per ASK.
+        with conn:
+            conn.execute("ALTER TABLE order_receipts RENAME TO order_receipts_legacy")
+            conn.execute(
+                """CREATE TABLE order_receipts (
+                    reply_id TEXT PRIMARY KEY,
+                    offer_id TEXT,
+                    ask_pkt_id TEXT NOT NULL,
+                    order_id TEXT NOT NULL,
+                    origin_node TEXT NOT NULL,
+                    received_by TEXT NOT NULL,
+                    item_code TEXT NOT NULL,
+                    requested_qty INTEGER NOT NULL,
+                    received_qty INTEGER NOT NULL,
+                    received_at TEXT NOT NULL,
+                    synced_at TEXT NOT NULL
+                )"""
+            )
+            conn.execute(
+                """INSERT INTO order_receipts
+                (reply_id, offer_id, ask_pkt_id, order_id, origin_node, received_by,
+                 item_code, requested_qty, received_qty, received_at, synced_at)
+                SELECT 'legacy:' || ask_pkt_id, NULL, ask_pkt_id, order_id,
+                       origin_node, received_by, item_code, requested_qty,
+                       received_qty, received_at, synced_at
+                FROM order_receipts_legacy"""
+            )
+            conn.execute("DROP TABLE order_receipts_legacy")
     conn.commit()
 
 
@@ -370,7 +413,13 @@ def sync_one_order_reply(conn, record):
         return False
     if not ask_pkt_id or not order_id or not item_code or not responder or qty < 0:
         return False
-    offer_id = "lora-reply-" + ask_pkt_id
+    reply_id = str(record.get("reply_id") or "")
+    reply_seq = str(record.get("reply_seq") or "")
+    if not reply_id or not reply_seq or not responder.isdecimal():
+        return False
+    if reply_id != f"{ask_pkt_id}:{_base36(int(responder))}:{reply_seq}":
+        return False
+    offer_id = "lora-reply-" + reply_id.replace(":", "~")
     if conn.execute("SELECT 1 FROM offers WHERE offer_id=?", (offer_id,)).fetchone():
         return False
     row = conn.execute(
@@ -442,34 +491,29 @@ def sync_received_order_replies(r, conn):
 def sync_one_order_receipt(conn, record):
     if not isinstance(record, dict) or record.get("source") != "LORA_ORDER_RECEIPT":
         return False
-
     ask_id = str(record.get("ask_pkt_id") or "")
+    reply_id = str(record.get("reply_id") or "")
     order_id = str(record.get("order_id") or "")
     origin = str(record.get("origin_node") or "")
     responder = str(record.get("received_by") or "")
     item_code = str(record.get("item_code") or "")
-
     try:
         requested = int(record["requested_qty"])
         received = int(record["received_qty"])
-        received_at = datetime.fromtimestamp(
-            float(record["received_at"]), timezone.utc
-        ).isoformat()
+        received_at = datetime.fromtimestamp(float(record["received_at"]), timezone.utc).isoformat()
     except (KeyError, ValueError, TypeError, OverflowError, OSError):
         return False
-
-    if (not all((ask_id, order_id, origin, responder, item_code))
+    if (not all((ask_id, reply_id, order_id, origin, responder, item_code))
             or "-" not in ask_id or ask_id.split("-", 1)[0] != origin
             or order_id != f"lora-{ask_id}" or not 0 < received <= requested):
         return False
-
-    # 同じASKについて受領記録は1つだけ
-    if conn.execute(
-        "SELECT 1 FROM order_receipts WHERE ask_pkt_id=?", (ask_id,)
-    ).fetchone():
+    # Exact identity of this responder's offer; prevent cross-reply receipts.
+    parts = reply_id.split(":")
+    if (len(parts) != 3 or parts[0] != ask_id
+            or not responder.isdecimal() or parts[1] != _base36(int(responder))):
         return False
-
-    # 元の発注内容を確認
+    if conn.execute("SELECT 1 FROM order_receipts WHERE reply_id=?", (reply_id,)).fetchone():
+        return False
     row = conn.execute(
         """SELECT o.requester_node, i.id, i.requested_qty,
                   i.accepted_qty, i.fulfilled_qty
@@ -477,52 +521,43 @@ def sync_one_order_receipt(conn, record):
            WHERE o.order_id=? AND i.item_code=?""",
         (order_id, item_code),
     ).fetchone()
-
     if (row is None or str(row["requester_node"]) != origin
             or int(row["requested_qty"]) != requested):
         return False
-
-    # 受注元がWebで回答した提供数量と照合
-    offered = conn.execute(
-        """SELECT COALESCE(SUM(oi.accepted_qty), 0)
-           FROM offers o JOIN offer_items oi ON o.offer_id=oi.offer_id
-           WHERE o.order_id=? AND o.responder_node=? AND oi.item_code=?""",
-        (order_id, responder, item_code),
-    ).fetchone()[0]
-
-    if (received != int(offered)
-            or int(row["fulfilled_qty"]) + received > int(row["accepted_qty"])):
-        print(f"[LORA-RECEIPT-SKIP] unmatched offer ask={ask_id}", flush=True)
+    # The local Web offer is linked by the reply_sent mapping written when sent.
+    # Use only its single accepted_qty; don't sum all earlier offers from this BASE.
+    # The responder stored the exact Web offer ID when it queued REPLY(P).
+    sent_offer_id = str(record.get("offer_id") or "")
+    if not sent_offer_id:
         return False
-
+    offered_row = conn.execute(
+        """SELECT oi.accepted_qty FROM offers o
+           JOIN offer_items oi ON o.offer_id=oi.offer_id
+           WHERE o.offer_id=? AND o.order_id=?
+             AND o.responder_node=? AND oi.item_code=?""",
+        (sent_offer_id, order_id, responder, item_code),
+    ).fetchone()
+    if (offered_row is None or int(offered_row[0]) != received
+            or int(row["fulfilled_qty"]) + received > int(row["accepted_qty"])):
+        print(f"[LORA-RECEIPT-SKIP] unmatched offer reply={reply_id}", flush=True)
+        return False
     now = utc_now_iso()
-
-    # 受領記録を保存
     conn.execute(
         """INSERT INTO order_receipts
-           (ask_pkt_id, order_id, origin_node, received_by, item_code,
+           (reply_id, offer_id, ask_pkt_id, order_id, origin_node, received_by, item_code,
             requested_qty, received_qty, received_at, synced_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (ask_id, order_id, origin, responder, item_code,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (reply_id, sent_offer_id, ask_id, order_id, origin, responder, item_code,
          requested, received, received_at, now),
     )
-
-    # 実際に受領された数量を反映
     conn.execute(
         "UPDATE order_items SET fulfilled_qty=fulfilled_qty+? WHERE id=?",
         (received, row["id"]),
     )
-
-    conn.execute(
-        "UPDATE orders SET updated_at=? WHERE order_id=?", (now, order_id)
-    )
-
-    print(
-        f"[LORA-RECEIPT-SYNC] ask={ask_id} "
-        f"item={item_code} qty={received}",
-        flush=True,
-    )
+    conn.execute("UPDATE orders SET updated_at=? WHERE order_id=?", (now, order_id))
+    print(f"[LORA-RECEIPT-SYNC] reply={reply_id} item={item_code} qty={received}", flush=True)
     return True
+
 
 
 def sync_received_order_receipts(r, conn):
