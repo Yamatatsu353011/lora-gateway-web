@@ -158,11 +158,10 @@
                     hasQuantity &&
                     typeof receipts !== "undefined" &&
                     receipts.some(r =>
-                      String(r.ask_pkt_id) ===
-                        String(order.order_id).slice(5) &&
                       String(r.item_code) === String(i.item_code) &&
                       String(r.received_by) === String(i.responder_node) &&
-                      Number(r.received_qty) === Number(i.accepted_qty)
+                      Number(r.received_qty) === Number(i.accepted_qty) &&
+                      String(r.offer_id || "") === String(i.offer_id)
                     );
                 %>
 
