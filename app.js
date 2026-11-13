@@ -440,9 +440,9 @@ app.get("/orders/:orderId", async (req, res) => {
   const receiptStatus = {};
   for (const offer of offers) {
     if (String(offer.offer_id).startsWith("lora-reply-")) {
-      const askId = offer.offer_id.slice("lora-reply-".length);
+      const replyId = offer.offer_id.slice("lora-reply-".length).replace(/~/g, ":");
       receiptStatus[offer.offer_id] = Boolean(
-        await redis.exists(`lora:orders:receipt_tx:${askId}`)
+        await redis.exists(`lora:orders:receipt_tx:${replyId}`)
       );
     }
   }
@@ -483,10 +483,16 @@ app.post("/orders/:orderId/receipt", async (req, res) => {
       return res.status(400).send("LoRaからの回答のみ受領確認できます");
     }
 
-    const askPktId = offerId.slice("lora-reply-".length);
-    if (!/^[0-9A-Za-z]+-[0-9A-Za-z]+$/.test(askPktId)) {
-      return res.status(400).send("Invalid ASK packet ID");
+    const encodedReply = offerId.slice("lora-reply-".length);
+    const parts = encodedReply.split("~");
+    if (parts.length !== 3 ||
+        !/^[0-9A-Za-z]+-[0-9A-Za-z]+$/.test(parts[0]) ||
+        !/^[0-9A-Z]+$/.test(parts[1]) ||
+        !/^[0-9A-Z]+$/.test(parts[2])) {
+      return res.status(400).send("Invalid LoRa reply identity");
     }
+    const [askPktId, responder36, replySeq] = parts;
+    const replyId = `${askPktId}:${responder36}:${replySeq}`;
 
     const rows = await dbAll(
       `SELECT o.responder_node, oi.item_code, oi.accepted_qty
@@ -505,8 +511,8 @@ app.post("/orders/:orderId/receipt", async (req, res) => {
 
     const [originalRaw, replyRaw, targetRaw] = await Promise.all([
       redis.get(`lora:orders:outgoing:${askPktId}`),
-      redis.get(`lora:orders:reply_received:${askPktId}`),
-      redis.get(`lora:orders:reply_position:${askPktId}`),
+      redis.get(`lora:orders:reply_received:${replyId}`),
+      redis.get(`lora:orders:reply_position:${replyId}`),
     ]);
     if (!originalRaw || !replyRaw || !targetRaw) {
       return res.status(409).send("元のASK/REPLY/送信先位置が未登録です");
@@ -524,7 +530,7 @@ app.post("/orders/:orderId/receipt", async (req, res) => {
       return res.status(409).send("発注情報と回答情報が一致しません");
     }
 
-    if (await redis.exists(`lora:orders:receipt_tx:${askPktId}`)) {
+    if (await redis.exists(`lora:orders:receipt_tx:${replyId}`)) {
       return res.status(409).send("この物資の受領通知は送信キュー登録済みです");
     }
 
@@ -532,6 +538,8 @@ app.post("/orders/:orderId/receipt", async (req, res) => {
       type: "ORDER_RECEIPT",
       order_id: orderId,
       ask_pkt_id: askPktId,
+      reply_id: replyId,
+      reply_seq: replySeq,
       responder_node: offer.responder_node,
       received_qty: receivedQty,
       created_at: nowIso(),
@@ -544,7 +552,7 @@ app.post("/orders/:orderId/receipt", async (req, res) => {
     if (listeners < 1) {
       return res.status(503).send("mesh_daemon.pyが受領イベントを購読していません");
     }
-    console.log(`[ORDER-RECEIPT-EVENT] ask=${askPktId} qty=${receivedQty}`);
+    console.log(`[ORDER-RECEIPT-EVENT] reply=${replyId} qty=${receivedQty}`);
     res.redirect(`/orders/${encodeURIComponent(orderId)}`);
   } catch (err) {
     console.error("[ORDER-RECEIPT-ERR]", err);
