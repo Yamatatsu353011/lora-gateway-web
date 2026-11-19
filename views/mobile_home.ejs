@@ -1,36 +1,143 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>災害物資支援システム</title>
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/mobile-home.css">
 </head>
 
-<body>
-  <header>
-    <h1>災害物資支援システム</h1>
-  </header>
+<body class="mobile-home-page">
+  <div class="mobile-home-shell">
 
-  <main>
-    <div class="card">
-      <h2>発注側</h2>
-      <p>必要な物資数を周辺拠点へ通知します。</p>
-      <a class="button-link primary" href="/orders/new">新規発注</a>
-      <a class="button-link" href="/orders">発注状況を見る</a>
-    </div>
+    <!-- ヘッダー -->
+    <header class="mobile-home-header">
+      <div class="mobile-home-logo">
+        <svg viewBox="0 0 64 48" fill="none"
+             xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 42L25 7L39 29L46 19L61 42H4Z"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linejoin="round"/>
+          <path d="M17 26L25 18L32 29L39 23"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"/>
+        </svg>
+      </div>
 
-    <div class="card">
-      <h2>受注側</h2>
-      <p>届いた発注に対して、提供可能数を返します。</p>
-      <a class="button-link primary" href="/requests">受注画面</a>
-    </div>
+      <h1>災害物資支援システム</h1>
+      <div class="mobile-home-subtitle">
+        <span></span>
+        Mobile Home
+        <span></span>
+      </div>
+    </header>
 
-    <div class="card">
-      <h2>位置・通信状態</h2>
-      <p>現在位置、GPS状態、LoRa状態を確認します。</p>
-      <a class="button-link" href="/">GPS Dashboard</a>
-    </div>
-  </main>
+    <main class="mobile-home-main">
+
+      <!-- 発注側 -->
+      <section class="mobile-feature-card order-card">
+        <div class="mobile-feature-top">
+          <div class="mobile-feature-icon">
+            <svg viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.7"
+                 stroke-linecap="round"
+                 stroke-linejoin="round">
+              <path d="M3 7L12 3L21 7L12 11L3 7Z"/>
+              <path d="M3 7V17L12 21L21 17V7"/>
+              <path d="M12 11V21"/>
+            </svg>
+          </div>
+
+          <div class="mobile-feature-content">
+            <h2>発注側</h2>
+            <p>必要な物資数を周辺拠点へ通知します。</p>
+          </div>
+        </div>
+
+        <div class="mobile-feature-actions">
+          <a href="/orders/new"
+             class="mobile-action mobile-action-primary">
+            新規発注
+            <span aria-hidden="true">›</span>
+          </a>
+
+          <a href="/orders"
+             class="mobile-action mobile-action-secondary">
+            発注状況を見る
+            <span aria-hidden="true">›</span>
+          </a>
+        </div>
+      </section>
+
+      <!-- 受注側 -->
+      <section class="mobile-feature-card receive-card">
+        <div class="mobile-feature-top">
+          <div class="mobile-feature-icon">
+            <svg viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.7"
+                 stroke-linecap="round"
+                 stroke-linejoin="round">
+              <path d="M2 6H14V17H2Z"/>
+              <path d="M14 10H18L22 14V17H14"/>
+              <circle cx="6" cy="18" r="2"/>
+              <circle cx="18" cy="18" r="2"/>
+              <path d="M2 9H8M1 12H6"/>
+            </svg>
+          </div>
+
+          <div class="mobile-feature-content">
+            <h2>受注側</h2>
+            <p>届いた発注に対して、提供可能数を返します。</p>
+          </div>
+        </div>
+
+        <div class="mobile-feature-actions">
+          <a href="/requests"
+             class="mobile-action mobile-action-secondary">
+            受注画面
+            <span aria-hidden="true">›</span>
+          </a>
+        </div>
+      </section>
+
+      <!-- 位置・通信状態 -->
+      <section class="mobile-feature-card gps-card">
+        <div class="mobile-feature-top">
+          <div class="mobile-feature-icon">
+            <svg viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.7"
+                 stroke-linecap="round"
+                 stroke-linejoin="round">
+              <path d="M12 21S5 14.5 5 9A7 7 0 0 1 19 9C19 14.5 12 21 12 21Z"/>
+              <circle cx="12" cy="9" r="2.5"/>
+            </svg>
+          </div>
+
+          <div class="mobile-feature-content">
+            <h2>位置・通信状態</h2>
+            <p>現在位置、GPS状態、LoRa状態を確認します。</p>
+          </div>
+        </div>
+
+        <div class="mobile-feature-actions">
+          <a href="/"
+             class="mobile-action mobile-action-secondary">
+            GPS Dashboard
+            <span aria-hidden="true">›</span>
+          </a>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="mobile-home-footer">
+      <span>Disaster Support System</span>
+      <span>LoRa × Mesh Network</span>
+    </footer>
+
+  </div>
 </body>
 </html>
