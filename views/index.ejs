@@ -7,6 +7,7 @@
   <title>LoRa Gateway GPS Dashboard</title>
 
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/dashboard-theme.css">
 
   <link
     rel="stylesheet"
@@ -18,21 +19,38 @@
   </script>
 </head>
 
-<body>
-
-  <header>
-    <h1>LoRa Gateway GPS Dashboard</h1>
-  </header>
-
-  <main>
-
-    <nav>
-      <a class="primary" href="/">GPS Dashboard</a>
-      <a href="/mobile">Mobile Home</a>
-      <a href="/orders/new">新規発注</a>
-      <a href="/orders">発注一覧</a>
-      <a href="/requests">受注画面</a>
-    </nav>
+<body class="dashboard-page">
+  <div class="dashboard-layout">
+    <aside class="dashboard-sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-symbol" aria-hidden="true">◈</span>
+        <div><strong>災害支援システム</strong><small>災害対策本部</small></div>
+      </div>
+      <div class="sidebar-section-title">メインメニュー</div>
+      <nav class="dashboard-nav" aria-label="メインメニュー">
+        <a class="active" href="/">◈ &nbsp; GPS Dashboard</a>
+        <a href="/mobile">▣ &nbsp; Mobile Home</a>
+        <a href="/orders/new">⊕ &nbsp; 新規発注</a>
+        <a href="/orders">▤ &nbsp; 発注一覧</a>
+        <a href="/requests">◉ &nbsp; 受注画面</a>
+      </nav>
+      <div class="sidebar-footer"><span class="sidebar-status-dot"></span>災害支援ネットワーク</div>
+    </aside>
+    <div class="dashboard-content">
+      <header class="dashboard-topbar">
+        <div>
+          <div class="topbar-label">災害対策本部 ／ 総合監視</div>
+          <h1>LoRa Gateway GPS Dashboard</h1>
+        </div>
+        <div class="topbar-right"><span class="system-label">LoRa通信拠点</span></div>
+      </header>
+      <main class="dashboard-main">
+        <section class="status-cards" aria-label="通信状態の概要">
+          <div class="status-card"><div class="status-card-label">GPS測位状態</div><div class="status-card-value" id="summary-gps">-</div><div class="status-card-footer">GPS STATUS</div></div>
+          <div class="status-card"><div class="status-card-label">接続ノード数</div><div class="status-card-value" id="summary-nodes">-</div><div class="status-card-footer">LoRa NODES</div></div>
+          <div class="status-card"><div class="status-card-label">送信キュー</div><div class="status-card-value" id="summary-tx">-</div><div class="status-card-footer">TX QUEUE</div></div>
+          <div class="status-card"><div class="status-card-label">受信キュー</div><div class="status-card-value" id="summary-rx">-</div><div class="status-card-footer">RX QUEUE</div></div>
+        </section>
 
 
     <div class="card">
@@ -167,7 +185,9 @@
       <pre id="raw_gps">-</pre>
     </div>
 
-  </main>
+      </main>
+    </div>
+  </div>
 
 
   <script>
@@ -379,6 +399,8 @@
 
         const nodes =
           data.nodes || [];
+
+        setText("summary-nodes", nodes.length);
 
 
         for (
@@ -728,6 +750,10 @@
             queue.lora_rx
           )
         );
+
+        setText("summary-gps", fmt(gps.fix_status || gps.mode));
+        setText("summary-tx", fmt(queue.lora_tx));
+        setText("summary-rx", fmt(queue.lora_rx));
 
 
         // ========================================================
