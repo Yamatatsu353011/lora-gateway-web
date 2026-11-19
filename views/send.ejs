@@ -2,47 +2,74 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Send LoRa Packet</title>
+
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/business-theme.css">
+
   <style>
-    body { font-family: sans-serif; margin: 2rem; }
-    label { display: block; margin-top: 1rem; }
-    input, textarea { width: 100%; max-width: 700px; }
-    nav a { margin-right: 1rem; }
+    label {
+      display: block;
+      margin-top: 1rem;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      max-width: 700px;
+    }
   </style>
 </head>
-<body>
-  <h1>Send LoRa Packet</h1>
 
-  <nav>
-    <a href="/">Dashboard</a>
-    <a href="/messages">Messages</a>
-    <a href="/send">Send</a>
-  </nav>
+<body class="business-page">
+  <header>
+    <h1>Send LoRa Packet</h1>
+  </header>
 
-  <form method="post" action="/send">
-    <label>
-      Destination Node
-      <input type="text" name="destination_node" placeholder="optional">
-    </label>
+  <main>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/messages">Messages</a>
+      <a href="/send">Send</a>
+    </nav>
 
-    <label>
-      Target BST Prefix
-      <input type="text" name="target_bst_prefix" placeholder="optional">
-    </label>
+    <form class="card" method="post" action="/send">
+      <label>
+        Destination Node
+        <input
+          type="text"
+          name="destination_node"
+          placeholder="optional">
+      </label>
 
-    <label>
-      Priority
-      <input type="number" name="priority" value="100">
-    </label>
+      <label>
+        Target BST Prefix
+        <input
+          type="text"
+          name="target_bst_prefix"
+          placeholder="optional">
+      </label>
 
-    <label>
-      Payload Text
-      <textarea name="payload_text" rows="6"></textarea>
-    </label>
+      <label>
+        Priority
+        <input
+          type="number"
+          name="priority"
+          value="100">
+      </label>
 
-    <p>
-      <button type="submit">Enqueue to LoRa TX</button>
-    </p>
-  </form>
+      <label>
+        Payload Text
+        <textarea
+          name="payload_text"
+          rows="6"></textarea>
+      </label>
+
+      <p>
+        <button type="submit">Enqueue to LoRa TX</button>
+      </p>
+    </form>
+  </main>
 </body>
 </html>
