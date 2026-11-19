@@ -1,0 +1,496 @@
+/* Dashboard-only styling based on reference disaster-support-system. */
+.dashboard-page { --bg: #080e1c; --card: #172338; --text: #eaf2ff; --muted: #94a3b8; --border: #293a55; --primary: #12253f; --primary-light: #1e4064; --accent: #22d3ee; --warning: #f59e0b; --ok: #34d399; --bad: #f87171; color: var(--text); }
+.dashboard-page table { background: transparent; }
+.dashboard-page th { background: #22334e; }
+.dashboard-page td { background: transparent; }
+.dashboard-page .card { box-shadow: 0 8px 28px rgba(0,0,0,.18); }
+.dashboard-page pre { background: #0f1c30; color: #a5f3fc; }
+
+/* =========================================
+   災害支援ダッシュボード
+   メインレイアウト
+========================================= */
+
+.dashboard-page {
+  background: #080e1c;
+  color: #e5efff;
+}
+
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* 左サイドバー */
+
+.dashboard-sidebar {
+  width: 245px;
+  flex-shrink: 0;
+  background: #0b1324;
+  border-right: 1px solid #20314e;
+  display: flex;
+  flex-direction: column;
+  padding: 25px 14px;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 10px 35px;
+  border-bottom: 1px solid #1c2a43;
+}
+
+.brand-symbol {
+  font-size: 32px;
+  color: #168bff;
+}
+
+.sidebar-brand strong {
+  display: block;
+  font-size: 16px;
+  letter-spacing: 0.5px;
+  color: #fff;
+}
+
+.sidebar-brand small {
+  display: block;
+  font-size: 10px;
+  color: #7389a8;
+  margin-top: 5px;
+}
+
+.sidebar-section-title {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #657a9b;
+  margin: 28px 12px 12px;
+}
+
+.dashboard-page .dashboard-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+}
+
+.dashboard-page .dashboard-nav a {
+  display: block;
+  margin: 0;
+  padding: 13px 15px;
+  background: transparent;
+  color: #93a6c3;
+  text-decoration: none;
+  border-radius: 7px;
+  font-size: 13px;
+  transition: all 0.2s ease;
+}
+
+.dashboard-page .dashboard-nav a:hover {
+  background: #152844;
+  color: #fff;
+}
+
+.dashboard-page .dashboard-nav a.active {
+  background: #126ce0;
+  color: #fff;
+  box-shadow: 0 0 18px rgba(18,108,224,0.25);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 20px 10px 0;
+  font-size: 10px;
+  color: #7891b3;
+}
+
+.sidebar-status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #66788e;
+  margin-right: 7px;
+}
+
+/* 上部ヘッダー */
+
+.dashboard-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.dashboard-page .dashboard-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  background: #0c1628;
+  padding: 22px 32px;
+  border-bottom: 1px solid #20314e;
+}
+
+.dashboard-topbar h1 {
+  font-size: 23px;
+  margin: 5px 0 0;
+}
+
+.topbar-label {
+  color: #168bff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.topbar-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.system-label {
+  border: 1px solid #2367a5;
+  border-radius: 5px;
+  color: #53afff;
+  padding: 8px 12px;
+  font-size: 11px;
+}
+
+.topbar-version {
+  color: #7891b3;
+  font-size: 11px;
+}
+
+.dashboard-page .dashboard-main {
+  max-width: none;
+  margin: 0;
+  padding: 24px;
+}
+
+/* スマホ対応 */
+
+@media (max-width: 800px) {
+  .dashboard-layout {
+    flex-direction: column;
+  }
+
+  .dashboard-sidebar {
+    width: 100%;
+    padding: 15px;
+  }
+
+  .sidebar-brand {
+    padding-bottom: 15px;
+  }
+
+  .dashboard-page .dashboard-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .dashboard-page .dashboard-nav a {
+    width: auto;
+    padding: 10px;
+    text-align: left;
+  }
+
+  .sidebar-section-title,
+  .sidebar-footer {
+    display: none;
+  }
+
+  .dashboard-page .dashboard-topbar {
+    padding: 18px;
+  }
+
+  .dashboard-page .dashboard-main {
+    padding: 12px;
+  }
+}
+
+/* =========================================
+   災害支援システム
+   地図・情報パネルレイアウト
+========================================= */
+
+/* 全体の背景 */
+.dashboard-page {
+  background:
+    radial-gradient(
+      ellipse at 50% 0%,
+      #122342 0%,
+      #080e1c 65%
+    );
+}
+
+/* メイン部分を2列にする */
+.dashboard-page .dashboard-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(320px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* 情報カード共通 */
+.dashboard-page .card {
+  background: #0d1729;
+  border: 1px solid #213552;
+  border-radius: 8px;
+  padding: 18px;
+  margin: 0;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.2);
+  min-width: 0;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.dashboard-page .card:hover {
+  border-color: #2877ba;
+  box-shadow:
+    0 0 20px rgba(25, 111, 205, 0.12);
+}
+
+/* カードの見出し */
+.dashboard-page .card h3 {
+  color: #e7f2ff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  padding-bottom: 12px;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #203550;
+}
+
+/* 地図エリア */
+.dashboard-page .dashboard-main > .card:first-child {
+  grid-column: 1;
+  grid-row: 1;
+  padding: 8px;
+  border: 1px solid #24517c;
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-page #map {
+  width: 100%;
+  height: 570px;
+  border: none;
+  border-radius: 5px;
+  background: #071525;
+}
+
+/* 右側の4つの情報カード */
+.dashboard-page .dashboard-main > .grid {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-content: stretch;
+}
+
+.dashboard-page .dashboard-main > .grid > .card {
+  padding: 15px;
+}
+
+/* 情報テーブル */
+.dashboard-page .card table {
+  width: 100%;
+  background: transparent;
+  border-collapse: collapse;
+}
+
+.dashboard-page .card td,
+.dashboard-page .card th {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #1c2d43;
+  padding: 9px 4px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page .card td:first-child {
+  color: #7891b3;
+}
+
+.dashboard-page .card td:last-child {
+  color: #e5f3ff;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* GPS・通信状態の色 */
+.dashboard-page .card .ok {
+  color: #34d399 !important;
+}
+
+.dashboard-page .card .warn {
+  color: #fbbf24 !important;
+}
+
+.dashboard-page .card .bad {
+  color: #fb7185 !important;
+}
+
+/* 下部の詳細データ */
+.dashboard-page .dashboard-main > .card:last-child {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.dashboard-page .card pre {
+  background: #081222;
+  color: #7dd3fc;
+  border: 1px solid #1d314e;
+  border-radius: 6px;
+  padding: 16px;
+  max-height: 230px;
+  overflow: auto;
+  font-size: 12px;
+}
+
+/* 画面サイズに合わせて配置を変更 */
+@media (max-width: 1250px) {
+  .dashboard-page .dashboard-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-page .dashboard-main > .card:first-child,
+  .dashboard-page .dashboard-main > .grid,
+  .dashboard-page .dashboard-main > .card:last-child {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .dashboard-page #map {
+    height: 450px;
+  }
+}
+
+@media (max-width: 700px) {
+  .dashboard-page .dashboard-main > .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-page #map {
+    height: 320px !important;
+  }
+
+  .dashboard-page .card {
+    padding: 12px;
+  }
+}
+
+/* =========================================
+   上部ステータスカード
+========================================= */
+
+.dashboard-page .status-cards {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+/* 既存の地図と情報カードを2段目へ移動 */
+.dashboard-page .dashboard-main > .card:first-of-type {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.dashboard-page .dashboard-main > .grid {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+/* GPS詳細データを3段目に配置 */
+.dashboard-page .dashboard-main > .card:last-child {
+  grid-column: 1 / -1;
+  grid-row: 3;
+}
+
+.dashboard-page .status-card {
+  background: linear-gradient(
+    145deg,
+    #142742,
+    #0c172a
+  );
+  border: 1px solid #254366;
+  border-radius: 10px;
+  padding: 20px;
+  min-width: 0;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  transition: border-color 0.2s ease;
+}
+
+.dashboard-page .status-card:hover {
+  border-color: #3b9cf0;
+}
+
+.status-card-label {
+  color: #9eb6d2;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.status-card-value {
+  color: #f0f8ff;
+  font-size: 28px;
+  font-weight: 700;
+  min-height: 38px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.status-card-footer {
+  border-top: 1px solid #254366;
+  padding-top: 12px;
+  margin-top: 14px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #4ea9f4;
+}
+
+/* タブレット */
+@media (max-width: 1250px) {
+  .dashboard-page .status-cards {
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-page .dashboard-main > .card:first-of-type {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .dashboard-page .dashboard-main > .grid {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .dashboard-page .dashboard-main > .card:last-child {
+    grid-column: 1;
+    grid-row: 4;
+  }
+}
+
+/* スマホ */
+@media (max-width: 600px) {
+  .dashboard-page .status-cards {
+    gap: 10px;
+  }
+
+  .dashboard-page .status-card {
+    padding: 14px;
+  }
+
+  .status-card-value {
+    font-size: 22px;
+  }
+}
