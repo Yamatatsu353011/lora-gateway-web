@@ -1,0 +1,364 @@
+/* Business pages only: visual styling inspired by disaster-support-system. */
+
+body.business-page {
+  --bg: #0b1220;
+  --card: #172338;
+  --text: #eaf2ff;
+  --muted: #94a3b8;
+  --border: #293a55;
+  --primary: #12253f;
+  --primary-light: #1e4064;
+  --accent: #22d3ee;
+  --warning: #f59e0b;
+  --ok: #34d399;
+  --bad: #f87171;
+  background: #0b1220;
+  color: #eaf2ff;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.business-page > header {
+  background: #0c1628;
+  border-bottom: 1px solid #20314e;
+  padding: 20px 24px;
+}
+
+.business-page > header h1 {
+  max-width: 1280px;
+  margin: 0 auto;
+  font-size: 1.5rem;
+  letter-spacing: .02em;
+}
+
+.business-page main {
+  max-width: 1280px;
+  padding: 28px 24px 60px;
+}
+
+.business-page nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 28px;
+}
+
+.business-page nav a,
+.business-page nav a.primary {
+  display: inline-block;
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.business-page nav a {
+  background: #22334e;
+  color: #eaf2ff;
+}
+
+.business-page nav a.primary {
+  background: #22d3ee;
+  color: #0b1220;
+  font-weight: 700;
+}
+
+.business-page nav a:hover,
+.business-page a.button-link:hover {
+  opacity: .85;
+}
+
+.business-page .card {
+  background: #172338;
+  border: 1px solid #293a55;
+  border-radius: 12px;
+  padding: 22px;
+  margin-bottom: 20px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.12);
+}
+
+.business-page .card h2,
+.business-page .card h3 {
+  color: #eaf2ff;
+  margin-top: 0;
+}
+
+.business-page .card h2 {
+  font-size: 1.15rem;
+  margin-bottom: 18px;
+}
+
+.business-page table {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent;
+}
+
+.business-page th,
+.business-page td {
+  padding: 12px 14px;
+  border: none;
+  border-bottom: 1px solid #293a55;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.business-page th {
+  background: #22334e;
+  color: #cbd5e1;
+  font-size: .85rem;
+  font-weight: 600;
+}
+
+.business-page td {
+  background: transparent;
+  font-size: .92rem;
+}
+
+.business-page tbody tr:hover {
+  background: #1c2c45;
+}
+
+.business-page td a {
+  color: #67e8f9;
+  font-weight: 600;
+}
+
+/* 入力欄 */
+
+.business-page input[type="text"],
+.business-page input[type="number"],
+.business-page input[type="date"],
+.business-page textarea,
+.business-page select {
+  background: #0f1c30;
+  color: #eaf2ff;
+  border: 1px solid #344763;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.business-page input:focus-visible,
+.business-page textarea:focus-visible,
+.business-page select:focus-visible,
+.business-page button:focus-visible,
+.business-page a:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 2px;
+}
+
+.business-page label {
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+/* ボタン */
+
+.business-page button,
+.business-page input[type="submit"] {
+  background: #22d3ee;
+  color: #0b1220;
+  font-weight: 700;
+  border-radius: 9px;
+}
+
+.business-page button:hover,
+.business-page input[type="submit"]:hover {
+  background: #67e8f9;
+}
+
+/* 補足テキスト・状態 */
+
+.business-page .small,
+.business-page .muted {
+  color: #94a3b8;
+}
+
+.business-page .status-open {
+  color: #fbbf24;
+}
+
+.business-page .status-fulfilled {
+  color: #34d399;
+}
+
+.business-page .bad {
+  color: #f87171;
+}
+
+/* 物資カード */
+
+.business-page .item-grid {
+  gap: 16px;
+}
+
+.business-page .item-title {
+  color: #eaf2ff;
+}
+
+/* BST-ID詳細情報 */
+
+.business-page .tile-details {
+  margin-top: 20px;
+}
+
+.business-page .tile-details summary {
+  cursor: pointer;
+  padding: 14px 18px;
+  background: #22334e;
+  border: 1px solid #293a55;
+  border-radius: 9px;
+  color: #67e8f9;
+  font-weight: 600;
+}
+
+.business-page .tile-details[open] summary {
+  margin-bottom: 16px;
+}
+
+/* 物資カテゴリー */
+
+.business-page .supply-category {
+  margin: 28px 0 34px;
+}
+
+.business-page .supply-category h3 {
+  font-size: 1.05rem;
+  color: #67e8f9;
+  padding-left: 12px;
+  border-left: 3px solid #22d3ee;
+}
+
+/* 一覧テーブルの横スクロール */
+
+.business-page .orders-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 10px;
+  background: #172338;
+  border: 1px solid #293a55;
+}
+
+.business-page .orders-table-scroll table {
+  min-width: 1050px;
+}
+
+.business-page .orders-table-scroll th,
+.business-page .orders-table-scroll td {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* 受注返信リンク */
+
+.business-page a[href^="/requests/"][href$="/reply"] {
+  color: #67e8f9;
+  font-weight: 600;
+}
+
+/* ログ等の表示 */
+
+.business-page pre {
+  background: #0f1c30;
+  color: #a5f3fc;
+  border: 1px solid #293a55;
+  border-radius: 8px;
+  padding: 14px;
+  overflow-x: auto;
+}
+
+/* Leaflet地図の表示 */
+
+.business-page .leaflet-container {
+  color: #222;
+}
+
+.business-page .leaflet-popup-content-wrapper,
+.business-page .leaflet-popup-tip {
+  background: #fff;
+  color: #222;
+}
+
+/* BST-IDタイル情報 */
+
+.business-page .tile-info-table td:first-child {
+  color: #94a3b8;
+}
+
+.business-page #target-map {
+  border-color: #344763;
+}
+
+/* =====================================
+   スマートフォン対応
+===================================== */
+
+@media (max-width: 700px) {
+
+  .business-page > header {
+    padding: 16px;
+  }
+
+  .business-page main {
+    padding: 16px 12px 40px;
+  }
+
+  .business-page nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .business-page nav a,
+  .business-page nav a.primary {
+    width: 100%;
+    text-align: center;
+    padding: 10px 8px;
+    font-size: .85rem;
+  }
+
+  .business-page .card {
+    padding: 16px;
+  }
+
+  .business-page table.responsive-table tr {
+    background: #172338;
+    border-color: #293a55;
+  }
+
+  .business-page table.responsive-table td {
+    border-bottom: 1px solid #293a55;
+  }
+
+  .business-page table.responsive-table td::before {
+    color: #94a3b8;
+  }
+
+  /* 一覧テーブルはスマートフォンでも横スクロール表示 */
+
+  .business-page .orders-table-scroll table.responsive-table {
+    display: table;
+  }
+
+  .business-page .orders-table-scroll table.responsive-table thead {
+    display: table-header-group;
+  }
+
+  .business-page .orders-table-scroll table.responsive-table tbody {
+    display: table-row-group;
+  }
+
+  .business-page .orders-table-scroll table.responsive-table tr {
+    display: table-row;
+  }
+
+  .business-page .orders-table-scroll table.responsive-table th,
+  .business-page .orders-table-scroll table.responsive-table td {
+    display: table-cell;
+  }
+
+  .business-page .orders-table-scroll table.responsive-table td::before {
+    content: none;
+  }
+}
