@@ -1,0 +1,391 @@
+/* =====================================
+   Mobile Home
+   Disaster Support System
+===================================== */
+
+body.mobile-home-page {
+  margin: 0;
+  min-height: 100vh;
+  background: #071426;
+  color: #f0f7ff;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+.mobile-home-page .mobile-home-shell {
+  min-height: 100vh;
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(
+      ellipse at 50% 5%,
+      #163659 0%,
+      transparent 45%
+    ),
+    linear-gradient(
+      180deg,
+      #081b32 0%,
+      #061226 100%
+    );
+}
+
+/* ヘッダー */
+
+.mobile-home-page .mobile-home-header {
+  background: transparent;
+  padding: 48px 20px 42px;
+  text-align: center;
+}
+
+.mobile-home-logo {
+  color: #56c9ff;
+  width: 70px;
+  margin: 0 auto 20px;
+  filter: drop-shadow(
+    0 0 12px rgba(55, 181, 255, 0.35)
+  );
+}
+
+.mobile-home-logo svg {
+  display: block;
+  width: 100%;
+}
+
+.mobile-home-page .mobile-home-header h1 {
+  font-size: clamp(22px, 5vw, 30px);
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin: 0 0 15px;
+  color: #ffffff;
+}
+
+.mobile-home-subtitle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  color: #a8c8e8;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.mobile-home-subtitle span {
+  width: 35px;
+  height: 1px;
+  background: #376186;
+}
+
+/* メインエリア */
+
+.mobile-home-page .mobile-home-main {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0 18px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  flex: 1;
+}
+
+/* 共通カード */
+
+.mobile-feature-card {
+  position: relative;
+  padding: 24px 20px;
+  border-radius: 17px;
+  background:
+    linear-gradient(
+      140deg,
+      #123353 0%,
+      #0b203a 70%,
+      #0c1a32 100%
+    );
+  border: 1px solid #228bbf;
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.18),
+    inset 0 0 25px rgba(24, 139, 225, 0.04);
+}
+
+.mobile-feature-top {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.mobile-feature-icon {
+  flex-shrink: 0;
+  width: 76px;
+  height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(48, 144, 211, 0.13);
+  border-radius: 17px;
+  color: #5bcbff;
+}
+
+.mobile-feature-icon svg {
+  width: 42px;
+  height: 42px;
+}
+
+.mobile-feature-content {
+  min-width: 0;
+  padding-left: 16px;
+  border-left: 1px solid #34648b;
+}
+
+.mobile-feature-content h2 {
+  margin: 0 0 8px;
+  font-size: 24px;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.mobile-feature-content p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.75;
+  color: #c0d2e7;
+}
+
+/* ボタン */
+
+.mobile-feature-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.mobile-home-page a.mobile-action {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px 10px;
+  border-radius: 12px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.mobile-home-page a.mobile-action:hover {
+  opacity: 1;
+  transform: translateY(-2px);
+}
+
+.mobile-action span {
+  font-size: 23px;
+  line-height: 0.6;
+}
+
+.mobile-home-page a.mobile-action-primary {
+  background: linear-gradient(
+    120deg,
+    #00c5e9,
+    #077ce9
+  );
+  border: 1px solid #29d8ff;
+  box-shadow: 0 0 16px rgba(0, 176, 245, 0.15);
+}
+
+.mobile-home-page a.mobile-action-secondary {
+  background: linear-gradient(
+    120deg,
+    #164066,
+    #102640
+  );
+  border: 1px solid #459edc;
+}
+
+/* カード別アクセント */
+
+.mobile-feature-card.order-card {
+  border-color: #24c7a5;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.18),
+    0 0 14px rgba(20, 216, 172, 0.07);
+}
+
+.order-card .mobile-feature-icon {
+  color: #34e5c5;
+  background: rgba(20, 216, 172, 0.1);
+}
+
+.mobile-feature-card.receive-card {
+  border-color: #299fea;
+}
+
+.mobile-feature-card.gps-card {
+  border-color: #7978eb;
+  background: linear-gradient(
+    140deg,
+    #192a50,
+    #0b2039 75%
+  );
+}
+
+.gps-card .mobile-feature-icon {
+  color: #a8a5ff;
+  background: rgba(126, 124, 235, 0.12);
+}
+
+.gps-card .mobile-home-page a {
+  color: #fff;
+}
+
+/* フッター */
+
+.mobile-home-footer {
+  padding: 22px 20px 30px;
+  border-top: 1px solid #1d3857;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10px;
+  color: #718eac;
+}
+
+/* スマホ対応 */
+
+@media (max-width: 480px) {
+  .mobile-home-page .mobile-home-header {
+    padding-top: 38px;
+    padding-bottom: 38px;
+  }
+
+  .mobile-home-page .mobile-home-main {
+    padding: 0 14px 24px;
+    gap: 16px;
+  }
+
+  .mobile-feature-card {
+    padding: 20px 16px;
+  }
+
+  .mobile-feature-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 14px;
+  }
+
+  .mobile-feature-icon svg {
+    width: 34px;
+    height: 34px;
+  }
+
+  .mobile-feature-top {
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .mobile-feature-content {
+    padding-left: 12px;
+  }
+
+  .mobile-feature-content h2 {
+    font-size: 21px;
+  }
+
+  .mobile-feature-content p {
+    font-size: 12px;
+  }
+
+  .mobile-home-page a.mobile-action {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 350px) {
+  .mobile-feature-actions {
+    flex-direction: column;
+  }
+}
+
+/* =====================================
+   Mobile Home - 落ち着いた配色に調整
+===================================== */
+
+/* 背景の光を弱くする */
+.mobile-home-page .mobile-home-shell {
+  background: linear-gradient(
+    180deg,
+    #0e1b2d 0%,
+    #0a1423 100%
+  );
+}
+
+/* ロゴの発光をなくす */
+.mobile-home-logo {
+  color: #76b5e3;
+  filter: none;
+}
+
+/* カードのネオン効果をなくす */
+.mobile-home-page .mobile-feature-card {
+  background: #14243a;
+  border: 1px solid #2c405a;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* カードごとの色を控えめに */
+.mobile-home-page .order-card {
+  border-left: 3px solid #4caa98;
+}
+
+.mobile-home-page .receive-card {
+  border-left: 3px solid #528fc9;
+}
+
+.mobile-home-page .gps-card {
+  border-left: 3px solid #8584b9;
+}
+
+/* アイコンの背景を落ち着いた色に */
+.mobile-home-page .mobile-feature-icon {
+  background: #1b3049;
+}
+
+.mobile-home-page .order-card .mobile-feature-icon {
+  color: #76c4b3;
+}
+
+.mobile-home-page .receive-card .mobile-feature-icon {
+  color: #82b8e4;
+}
+
+.mobile-home-page .gps-card .mobile-feature-icon {
+  color: #aaa8df;
+}
+
+/* ボタンをシンプルに */
+.mobile-home-page a.mobile-action-primary {
+  background: #246ca5;
+  border: 1px solid #347db5;
+  box-shadow: none;
+}
+
+.mobile-home-page a.mobile-action-secondary {
+  background: #1a3452;
+  border: 1px solid #345373;
+}
+
+/* ホバー時も発光させない */
+.mobile-home-page .mobile-feature-card:hover {
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.16);
+}
+
+.mobile-home-page a.mobile-action:hover {
+  transform: translateY(-1px);
+  box-shadow: none;
+}
