@@ -170,6 +170,13 @@ def ensure_schema(conn):
         """
     )
 
+    # Older deployments might not yet have the node_type column.
+    node_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(mobile_nodes)")
+    }
+    if "node_type" not in node_columns:
+        conn.execute("ALTER TABLE mobile_nodes ADD COLUMN node_type TEXT DEFAULT 'unknown'")
+
     # New receipts must be identified by reply, not by ASK.
     conn.execute(
         """CREATE TABLE IF NOT EXISTS order_receipts (
@@ -235,6 +242,10 @@ def sync_one_node(conn, node):
     bst_bit_len = node.get("bst_bit_len")
     bst_hex = node.get("bst_hex")
 
+    # POS is emitted by a mobile monitoring node.  A sender position saved
+    # by ASK has no source field, so it is classified by business traffic below.
+    observed_type = "mobile" if node.get("source") == "REPLY_POS" else "unknown"
+
     if (lat is None or lon is None) and bst_hex and bst_bit_len:
         decoded = parse_bst_id_xy_from_hex(
             bst_hex=str(bst_hex), bit_len=int(bst_bit_len)
@@ -253,8 +264,13 @@ def sync_one_node(conn, node):
             node_id, node_type, lat, lon, alt, speed_mps, heading_deg,
             bst_xy, bst_id_int, bst_bit_len, status, last_report_at, updated_at
         )
-        VALUES (?, 'mobile', ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
         ON CONFLICT(node_id) DO UPDATE SET
+            node_type = CASE
+                WHEN mobile_nodes.node_type = 'base' THEN 'base'
+                WHEN excluded.node_type = 'mobile' THEN 'mobile'
+                ELSE mobile_nodes.node_type
+            END,
             lat = excluded.lat,
             lon = excluded.lon,
             alt = excluded.alt,
@@ -268,12 +284,41 @@ def sync_one_node(conn, node):
             updated_at = excluded.updated_at
         """,
         [
-            node_id, lat, lon, alt, speed_mps, heading_deg, bst_xy,
+            node_id, observed_type, lat, lon, alt, speed_mps, heading_deg, bst_xy,
             str(bst_id_int) if bst_id_int is not None else None,
             int(bst_bit_len) if bst_bit_len is not None else None,
             now, now,
         ],
     )
+
+
+def sync_base_node_roles(r, conn):
+    """Persist BASE classification from actual LoRa business ASK/REPLY records.
+
+    Only UPDATE existing map nodes: ASK/REPLY without a sender coordinate
+    must not create a marker at a fabricated location.  Once BASE, always BASE.
+    """
+    base_ids = set()
+    for raw in r.lrange(REDIS_RECEIVED_ORDERS, 0, 999):
+        record = json_loads_safe(raw)
+        if isinstance(record, dict) and record.get("source") == "LORA_ORDER_ASK":
+            node_id = str(record.get("origin_node") or "")
+            if len(node_id) == 4 and node_id.isdecimal():
+                base_ids.add(node_id)
+
+    for raw in r.lrange(REDIS_RECEIVED_REPLIES, 0, 999):
+        record = json_loads_safe(raw)
+        if isinstance(record, dict) and record.get("source") == "LORA_ORDER_REPLY":
+            node_id = str(record.get("responder_node") or "")
+            if len(node_id) == 4 and node_id.isdecimal():
+                base_ids.add(node_id)
+
+    for node_id in base_ids:
+        conn.execute(
+            "UPDATE mobile_nodes SET node_type = 'base' WHERE node_id = ?",
+            (node_id,),
+        )
+    conn.commit()
 
 
 # ============================================================
@@ -524,8 +569,7 @@ def sync_one_order_receipt(conn, record):
     if (row is None or str(row["requester_node"]) != origin
             or int(row["requested_qty"]) != requested):
         return False
-    # The local Web offer is linked by the reply_sent mapping written when sent.
-    # Use only its single accepted_qty; don't sum all earlier offers from this BASE.
+    # Exact identity of this responder's offer; prevent cross-reply receipts.
     # The responder stored the exact Web offer ID when it queued REPLY(P).
     sent_offer_id = str(record.get("offer_id") or "")
     if not sent_offer_id:
@@ -610,6 +654,7 @@ def main():
                 sync_received_orders(r, conn)
                 sync_received_order_replies(r, conn)
                 sync_received_order_receipts(r, conn)
+                sync_base_node_roles(r, conn)
             except Exception as exc:
                 conn.rollback()
                 print(f"[LORA-ORDER-SYNC-ERR] {exc}", flush=True)
