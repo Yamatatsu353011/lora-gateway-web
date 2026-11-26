@@ -720,6 +720,7 @@ app.post("/requests/:orderId/reply", async (req, res) => {
   await dbRun(
     `UPDATE orders
      SET status = ?, updated_at = ?`,
+     WHERE order_id = ?`,
     [newStatus, createdAt, orderId]
   );
 
