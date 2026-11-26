@@ -242,7 +242,7 @@ def sync_one_node(conn, node):
     bst_bit_len = node.get("bst_bit_len")
     bst_hex = node.get("bst_hex")
 
-    # POS is emitted by a mobile monitoring node.  A sender position saved
+    # POS is emitted by a mobile monitoring node. A sender position saved
     # by ASK has no source field, so it is classified by business traffic below.
     observed_type = "mobile" if node.get("source") == "REPLY_POS" else "unknown"
 
@@ -267,7 +267,6 @@ def sync_one_node(conn, node):
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
         ON CONFLICT(node_id) DO UPDATE SET
             node_type = CASE
-                WHEN mobile_nodes.node_type = 'base' THEN 'base'
                 WHEN excluded.node_type = 'mobile' THEN 'mobile'
                 ELSE mobile_nodes.node_type
             END,
@@ -293,27 +292,50 @@ def sync_one_node(conn, node):
 
 
 def sync_base_node_roles(r, conn):
-    """Persist BASE classification from actual LoRa business ASK/REPLY records.
+    """Classify BASE from business traffic unless a newer POS exists.
 
     Only UPDATE existing map nodes: ASK/REPLY without a sender coordinate
-    must not create a marker at a fabricated location.  Once BASE, always BASE.
+    must not create a marker at a fabricated location.
     """
-    base_ids = set()
+    base_last_seen = {}
     for raw in r.lrange(REDIS_RECEIVED_ORDERS, 0, 999):
         record = json_loads_safe(raw)
         if isinstance(record, dict) and record.get("source") == "LORA_ORDER_ASK":
             node_id = str(record.get("origin_node") or "")
             if len(node_id) == 4 and node_id.isdecimal():
-                base_ids.add(node_id)
+                try:
+                    received_at = float(record.get("received_at") or 0)
+                except (ValueError, TypeError):
+                    received_at = 0.0
+                base_last_seen[node_id] = max(
+                    base_last_seen.get(node_id, 0), received_at
+                )
 
     for raw in r.lrange(REDIS_RECEIVED_REPLIES, 0, 999):
         record = json_loads_safe(raw)
         if isinstance(record, dict) and record.get("source") == "LORA_ORDER_REPLY":
             node_id = str(record.get("responder_node") or "")
             if len(node_id) == 4 and node_id.isdecimal():
-                base_ids.add(node_id)
+                try:
+                    received_at = float(record.get("received_at") or 0)
+                except (ValueError, TypeError):
+                    received_at = 0.0
+                base_last_seen[node_id] = max(
+                    base_last_seen.get(node_id, 0), received_at
+                )
 
-    for node_id in base_ids:
+    for node_id, base_time in base_last_seen.items():
+        # If the latest position is a monitoring POS, this node is being
+        # operated as MOBILE now, even if it was a BASE in an older test.
+        position = json_loads_safe(r.get(f"lora:nodes:{node_id}"))
+        if isinstance(position, dict) and position.get("source") == "REPLY_POS":
+            try:
+                pos_time = float(position.get("updated_at") or 0)
+            except (ValueError, TypeError):
+                pos_time = 0.0
+            if pos_time >= base_time:
+                continue
+
         conn.execute(
             "UPDATE mobile_nodes SET node_type = 'base' WHERE node_id = ?",
             (node_id,),
@@ -569,7 +591,8 @@ def sync_one_order_receipt(conn, record):
     if (row is None or str(row["requester_node"]) != origin
             or int(row["requested_qty"]) != requested):
         return False
-    # Exact identity of this responder's offer; prevent cross-reply receipts.
+    # The local Web offer is linked by the reply_sent mapping written when sent.
+    # Use only its single accepted_qty; don't sum all earlier offers from this BASE.
     # The responder stored the exact Web offer ID when it queued REPLY(P).
     sent_offer_id = str(record.get("offer_id") or "")
     if not sent_offer_id:
