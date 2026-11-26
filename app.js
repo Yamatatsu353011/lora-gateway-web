@@ -150,6 +150,7 @@ app.get("/api/nodes", async (req, res) => {
     const nodes = await dbAll(
       `SELECT
          node_id,
+         node_type,
          lat,
          lon,
          updated_at
@@ -169,6 +170,37 @@ app.get("/api/nodes", async (req, res) => {
       nodes: [],
       error: "failed to load mobile nodes"
     });
+  }
+});
+
+// Coastal patrol detections recorded by the BASE mesh daemon in Redis.
+// These are events (the detecting node's location), not mobile node states.
+app.get("/api/detections", async (req, res) => {
+  try {
+    const entries = await redis.lrange("lora:detections:received", 0, 99);
+    const detections = entries.flatMap((entry) => {
+      try {
+        const record = JSON.parse(entry);
+        const lat = Number(record.lat);
+        const lon = Number(record.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) ||
+            lat < -90 || lat > 90 || lon < -180 || lon > 180) return [];
+
+        return [{
+          event_id: String(record.event_id || ""),
+          node_id: String(record.node_id || ""),
+          lat,
+          lon,
+          received_at: record.received_at ?? null
+        }];
+      } catch {
+        return [];
+      }
+    });
+    res.json({ detections });
+  } catch (err) {
+    console.error("[API-DETECTIONS-ERR]", err);
+    res.status(500).json({ detections: [], error: "failed to load detections" });
   }
 });
 
@@ -687,8 +719,7 @@ app.post("/requests/:orderId/reply", async (req, res) => {
 
   await dbRun(
     `UPDATE orders
-     SET status = ?, updated_at = ?
-     WHERE order_id = ?`,
+     SET status = ?, updated_at = ?`,
     [newStatus, createdAt, orderId]
   );
 
